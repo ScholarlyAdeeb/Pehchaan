@@ -57,12 +57,12 @@ and the PostgreSQL chain work as before.
 
 ## 3. Vercel project
 
-- Root directory: the repository root (leave Vercel's default). `vercel.json`
-  there sets the install command, build command and output directory, so no
-  build settings need to be entered in the Vercel dashboard.
-- Build: `npm run build --prefix frontend` produces `frontend/dist/`
-  (dashboard) and `frontend/dist-server/app.cjs` (the bundled gateway that
-  `api/index.js` loads). The bundle contains its own dependencies, so the
+- Root directory: `frontend`. Vercel's import screen lists it as a deployable
+  directory; pick that one and do not import `backend`. `frontend/vercel.json`
+  sets the install command, build command and output directory, so no build
+  settings need to be entered in the Vercel dashboard.
+- Build: `npm run build` produces `dist/` (dashboard) and
+  `dist-server/app.cjs` (the bundled gateway that `api/index.js` loads). The bundle contains its own dependencies, so the
   function does not ship `node_modules`.
 - Environment variables (Production):
 

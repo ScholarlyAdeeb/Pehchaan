@@ -26,10 +26,9 @@ Docs: [problem statement](docs/PROBLEM_STATEMENT.md) · [architecture and measur
 | [`backend/`](backend) | Screening engine (Python, FastAPI): OCR, field detection, validation rules, forensics, face match, risk score |
 | [`frontend/`](frontend) | Dashboard and API gateway (React, Express): sign-in, roles, storage, audit ledger |
 | [`fabric/`](fabric) | Hyperledger Fabric network and chaincode that anchor sealed audit batches |
-| [`api/`](api) | Vercel function entry; it loads the gateway bundle built from `frontend/` |
 | [`docs/`](docs) | Architecture, API, deployment, slides |
 | [`sample-data/`](sample-data) | Demo images (generated locally, not committed) |
-| `vercel.json` | Vercel build, routing and cron configuration |
+| `frontend/vercel.json`, `frontend/api/` | Vercel build, routing and cron configuration, and the function entry |
 | `start_all.bat` | One-step local launcher (Windows) |
 
 ---
@@ -76,7 +75,7 @@ Optional Hyperledger Fabric ledger (needs Docker): `bash fabric/network.sh up`.
 
 Architecture and measured results: [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md).
 Hosting the dashboard and gateway on Vercel: [`docs/DEPLOYMENT_VERCEL.md`](docs/DEPLOYMENT_VERCEL.md).
-Import the repository as it is (Root Directory = repository root); `vercel.json` holds the
+Import the repository and pick the `frontend` directory (Root Directory = `frontend`); `vercel.json` there holds the
 build settings. The engine and the Fabric network run on your own machine or VM.
 
 **First login:** on an empty database the sign-in page offers *Create Admin Account*, which
@@ -203,11 +202,11 @@ frontend/
   server.ts                  Express: auth, roles, /api/screenings → engine → Neon
   server/                    neon.ts (storage, hash chain), session.ts, outbox.ts, fabric.ts, trust.ts, …
   src/components/            NewScanView, ScreeningReportView, OverviewView, SystemHealthDocsView, …
+  api/index.js               Vercel function entry (loads dist-server/app.cjs)
+  vercel.json                Vercel build, routing and cron settings
 fabric/
   network.sh                 up | deploy | status | down | destroy
   chaincode/auditledger/     Go chaincode that stores batch roots
-api/index.js                 Vercel function entry (loads frontend/dist-server/app.cjs)
-vercel.json                  Vercel build, routing and cron settings
 sample-data/                 demo images (generated, not committed)
 ```
 
