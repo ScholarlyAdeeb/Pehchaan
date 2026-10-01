@@ -1,0 +1,20 @@
+# Identities for the PEHCHAAN ledger network (input to cryptogen).
+OrdererOrgs:
+  - Name: Orderer
+    Domain: pehchaan.local
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+        SANS: [localhost, 127.0.0.1]
+
+PeerOrgs:
+  # The organisation operating the checkpoints. Add a second PeerOrg (for
+  # example the immigration authority) to make endorsement multi-party.
+  - Name: SSB
+    Domain: ssb.pehchaan.local
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+      SANS: [localhost, 127.0.0.1]
+    Users:
+      Count: 1

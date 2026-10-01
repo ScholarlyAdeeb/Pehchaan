@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { anchorBatch, fabricEnabled, fabricStatus, listAnchors } from './fabric.ts';
 import { getNeonPool, initNeonSchema, insertAuditLog, insertSystemLog, verifyChainIntegrity } from './neon.ts';
 import type { AuthPayload } from './security.ts';
 import { inScope, scopeOf } from './security.ts';
@@ -218,14 +219,68 @@ export async function sealBatch(actor = 'system'): Promise<any | null> {
   )).rows[0];
   await pool.query('UPDATE pehchaan_scans SET batch_id = $1 WHERE id = ANY($2)', [batch.id, rows.map((r: any) => r.id)]);
   await insertSystemLog({ actor, role: 'SYSTEM', checkpoint: '', event: 'batch_sealed', status: 'success', reference_id: `batch ${batch.id}` });
-  return batch;
+  // Sealing must not depend on the ledger being reachable: a batch that could
+  // not be anchored now is picked up by anchorPendingBatches() later.
+  const anchored = await anchorOnFabric(batch).catch((err) => {
+    console.warn(`Batch #${batch.id} sealed but not yet anchored on Fabric: ${(err as Error).message}`);
+    return null;
+  });
+  return anchored ? { ...batch, ...anchored } : batch;
+}
+
+async function anchorOnFabric(batch: any): Promise<{ fabric_tx: string; fabric_anchored_at: string } | null> {
+  if (!fabricEnabled()) return null;
+  const anchor = await anchorBatch(batch);
+  const pool = await db();
+  await pool.query('UPDATE pehchaan_anchor_batches SET fabric_tx = $1, fabric_anchored_at = $2 WHERE id = $3',
+    [anchor.txId, anchor.anchoredAt, batch.id]);
+  await insertSystemLog({ actor: 'system', role: 'SYSTEM', checkpoint: '', event: 'batch_anchored_fabric', status: 'success', reference_id: `batch ${batch.id}` });
+  return { fabric_tx: anchor.txId, fabric_anchored_at: anchor.anchoredAt };
+}
+
+/** Anchors batches sealed before Fabric was configured, or while the peer was unreachable. */
+export async function anchorPendingBatches(limit = 25): Promise<number> {
+  if (!fabricEnabled()) return 0;
+  const pool = await db();
+  const pendingRows = (await pool.query(
+    'SELECT * FROM pehchaan_anchor_batches WHERE fabric_tx IS NULL ORDER BY id ASC LIMIT $1', [limit])).rows;
+  let done = 0;
+  for (const batch of pendingRows) {
+    await anchorOnFabric(batch); // stops at the first failure; the next run retries from there
+    done++;
+  }
+  return done;
+}
+
+/**
+ * Compares every batch root in the database with the root the Fabric ledger
+ * recorded when the batch was sealed. A difference means the database copy
+ * of that batch was rewritten after sealing.
+ */
+export async function verifyAgainstFabric() {
+  const status = await fabricStatus();
+  if (!status.enabled || !status.reachable) return { ...status, checked: 0, mismatched: [], missing: [] };
+  const pool = await db();
+  const batches = (await pool.query('SELECT id, merkle_root, fabric_tx FROM pehchaan_anchor_batches ORDER BY id ASC')).rows;
+  const onLedger = new Map((await listAnchors()).map((a) => [a.batchId, a]));
+  const mismatched: { batch: number; database: string; ledger: string }[] = [];
+  const missing: number[] = [];
+  for (const b of batches) {
+    const anchor = onLedger.get(String(b.id));
+    if (!anchor) missing.push(b.id);
+    else if (anchor.merkleRoot !== b.merkle_root) mismatched.push({ batch: b.id, database: b.merkle_root, ledger: anchor.merkleRoot });
+  }
+  return { ...status, checked: batches.length, mismatched, missing };
 }
 
 export async function listBatches() {
   const pool = await db();
   const batches = (await pool.query('SELECT * FROM pehchaan_anchor_batches ORDER BY id DESC LIMIT 100')).rows;
   const unsealed = Number((await pool.query('SELECT COUNT(*) FROM pehchaan_scans WHERE batch_id IS NULL')).rows[0].count);
-  return { batches, unsealed, publicKey: signingKey().publicKey, openTimestamps: process.env.ANCHOR_OPENTIMESTAMPS === 'true' };
+  return {
+    batches, unsealed, publicKey: signingKey().publicKey, openTimestamps: process.env.ANCHOR_OPENTIMESTAMPS === 'true',
+    fabric: await fabricStatus(),
+  };
 }
 
 export async function receiptFor(user: AuthPayload, scanId: string) {

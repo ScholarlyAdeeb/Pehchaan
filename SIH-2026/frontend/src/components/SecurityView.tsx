@@ -283,7 +283,13 @@ const LedgerTab: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ledgerCheck, setLedgerCheck] = useState<any>(null);
   const load = useCallback(() => api('/api/security/batches').then(setData).catch((e) => setError(e.message)), [api]);
+  const checkLedger = async () => {
+    setBusy(true);
+    try { setLedgerCheck(await api('/api/security/fabric/verify')); } catch (e: any) { setError(e.message); }
+    setBusy(false);
+  };
   useEffect(() => { load(); }, [load]);
   const seal = async () => {
     setBusy(true);
@@ -303,13 +309,39 @@ const LedgerTab: React.FC = () => {
           (its hash plus the sibling hashes to the root) that proves it existed unchanged at sealing time, without revealing other records.
           {!data?.openTimestamps && ' External timestamping is off; set ANCHOR_OPENTIMESTAMPS=true to also anchor roots publicly.'}
         </p>
+        <div className="text-[11px] border border-[#efedf3] rounded p-2.5 space-y-1.5 max-w-3xl">
+          <p className="font-semibold text-[#1a1b1f]">Hyperledger Fabric ledger</p>
+          {!data?.fabric?.enabled ? (
+            <p className="text-[#717785]">Not configured. Batch roots are kept in the database only.</p>
+          ) : !data.fabric.reachable ? (
+            <p className="text-[#8a5600]">Peer {data.fabric.endpoint} is unreachable ({data.fabric.error}). Sealed batches are anchored when it returns.</p>
+          ) : (
+            <p className="text-[#006a26]">
+              Connected to {data.fabric.endpoint}, channel <b>{data.fabric.channel}</b>, chaincode <b>{data.fabric.chaincode}</b>:
+              {' '}{data.fabric.anchors} batch root(s) on the ledger. A root is written once and cannot be changed there.
+            </p>
+          )}
+          {data?.fabric?.enabled && (
+            <button onClick={checkLedger} disabled={busy} className="btn-secondary disabled:opacity-50">Compare database with ledger</button>
+          )}
+          {ledgerCheck && (
+            <p className={ledgerCheck.mismatched?.length ? 'text-[#ba1a1a] font-semibold' : 'text-[#1a1b1f]'}>
+              {!ledgerCheck.reachable
+                ? `Ledger unreachable: ${ledgerCheck.error}`
+                : ledgerCheck.mismatched.length
+                  ? `ALTERED: batch ${ledgerCheck.mismatched.map((m: any) => `#${m.batch}`).join(', ')} has a different root in the database than on the ledger.`
+                  : `${ledgerCheck.checked - ledgerCheck.missing.length} of ${ledgerCheck.checked} batch root(s) match the ledger`
+                    + (ledgerCheck.missing.length ? `; ${ledgerCheck.missing.length} not anchored yet.` : '.')}
+            </p>
+          )}
+        </div>
         {!data ? <p className="text-xs text-[#717785]">Loading…</p> : data.batches.length === 0 ? (
           <p className="text-xs text-[#717785]">No batches yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="text-left text-[#717785] border-b border-[#efedf3]">
-                <th className="py-2 pr-3">Batch</th><th className="py-2 px-3">Sealed</th><th className="py-2 px-3 text-right">Records</th><th className="py-2 px-3">Merkle root</th><th className="py-2 pl-3">Public timestamp</th>
+                <th className="py-2 pr-3">Batch</th><th className="py-2 px-3">Sealed</th><th className="py-2 px-3 text-right">Records</th><th className="py-2 px-3">Merkle root</th><th className="py-2 px-3">Fabric transaction</th><th className="py-2 pl-3">Public timestamp</th>
               </tr></thead>
               <tbody>
                 {data.batches.map((b: any) => (
@@ -318,6 +350,7 @@ const LedgerTab: React.FC = () => {
                     <td className="py-2 px-3">{new Date(b.created_at).toLocaleString('en-IN')}</td>
                     <td className="py-2 px-3 text-right tabular-nums">{b.leaf_count}</td>
                     <td className="py-2 px-3 font-mono text-[11px] break-all">{b.merkle_root}</td>
+                    <td className="py-2 px-3 font-mono text-[11px]" title={b.fabric_tx || ''}>{b.fabric_tx ? `${b.fabric_tx.slice(0, 16)}…` : 'not anchored'}</td>
                     <td className="py-2 pl-3">{b.external_proof ? 'OpenTimestamps (pending Bitcoin confirmation)' : '—'}</td>
                   </tr>
                 ))}
