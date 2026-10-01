@@ -1,6 +1,6 @@
 // PEHCHAAN Border Outpost Service Worker
 // Supports offline resilience and local store-and-forward operations
-const CACHE_NAME = 'pehchaan-cache-v1';
+const CACHE_NAME = 'pehchaan-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -45,12 +45,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for fonts and static assets
-  if (
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com') ||
-    url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2)$/)
-  ) {
+  // Leave other origins (the web fonts) to the browser. A fetch made from
+  // here is subject to the gateway's connect-src policy, which allows only
+  // this origin, so intercepting them made the icon font fail to load.
+  if (url.origin !== self.location.origin || event.request.method !== 'GET') {
+    return;
+  }
+
+  // Cache-first for static assets
+  if (url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2)$/)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;

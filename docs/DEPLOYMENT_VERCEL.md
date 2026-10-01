@@ -12,9 +12,9 @@ network, which must run on a machine you control.
 | Screening engine (Python) | A VM or the checkpoint machine | PyTorch, Tesseract and a 166 MB model exceed Vercel's 250 MB function limit; it also wants a GPU. |
 | Fabric peer and orderer | A VM or the checkpoint machine | Long-running nodes with a ledger on disk. |
 
-Status: the function entry was exercised locally against the bundled gateway,
-in a folder with no `node_modules` (health, auth, 404 fallback, cron secret). It has **not** been deployed to
-Vercel from this repository; the first deployment is the real test.
+Status: the dashboard and gateway are deployed at
+https://tumharipehchaan.vercel.app (health and sign-in endpoints answer).
+Scans from that site need the engine of step 1 to be running and reachable.
 
 ## 1. Engine host
 

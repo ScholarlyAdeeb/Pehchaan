@@ -360,7 +360,8 @@ training scripts, and the two face models come from the OpenCV model zoo.
 | Earlier claim | Actual state |
 |---|---|
 | A multi-organisation Fabric network | The Fabric ledger is real but has one organisation and one orderer (8.1). |
-| The gateway deployed on Vercel | Packaged and exercised locally (`docs/DEPLOYMENT_VERCEL.md`); not yet deployed. |
+| The whole system hosted | The dashboard and gateway are deployed on Vercel (`docs/DEPLOYMENT_VERCEL.md`). The engine and the Fabric network are not hosted there; scans from the hosted site work only while an engine is reachable at the configured address. |
+| A native mobile app | `mobile/` is an Android shell that opens the hosted dashboard; it has not been tested on a physical phone. |
 | Offline administration and earlier-screenings lookup | Need the database (8.3). |
 | Accuracy on real documents | Not measured. All figures are on generated cards (3.4). |
 | Watchlist / Interpol / immigration lookups | Not built. Records checks cover the issued-documents database and earlier PEHCHAAN scans. |

@@ -14,7 +14,17 @@ interface ModelInfo {
   classes?: string[];
   details?: Record<string, unknown> | null;
   caveat?: string | null;
+  // Detector models report box-accuracy figures instead of the classifier's.
+  field_extraction?: {
+    held_out_cards: number;
+    fields_checked: number;
+    accuracy_full_page_only: number;
+    accuracy_with_regions: number;
+  } | null;
   training?: {
+    held_out_photo_style?: { map50: number; map75: number; mean_iou: number };
+    best_epoch?: number;
+    split?: string;
     train_images: number;
     validation_images: number;
     validation_accuracy: number;
@@ -203,12 +213,12 @@ const ModelCard: React.FC<{ m: ModelInfo }> = ({ m }) => (
     {m.weights?.present && (
       <p className="text-[#717785]">Weights {m.weights.size_mb} MB · updated {new Date(m.weights.modified!).toLocaleDateString()}</p>
     )}
-    {m.training && (
+    {m.training && typeof m.training.validation_accuracy === 'number' && (
       <div className="bg-[#f4f3f8] rounded-lg p-3 space-y-2">
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span><b>{(m.training.validation_accuracy * 100).toFixed(1)}%</b> validation accuracy</span>
           <span>{m.training.train_images} train / {m.training.validation_images} held-out images</span>
-          <span>{m.training.epochs} epochs · {m.training.optimizer} · {m.training.input_size.join('×')} px</span>
+          <span>{m.training.epochs} epochs · {m.training.optimizer} · {(m.training.input_size || []).join('×')} px</span>
         </div>
         <table className="text-[11px] tabular-nums">
           <thead>
@@ -226,6 +236,21 @@ const ModelCard: React.FC<{ m: ModelInfo }> = ({ m }) => (
           </tbody>
         </table>
       </div>
+    )}
+    {m.training?.held_out_photo_style && (
+      <div className="bg-[#f4f3f8] rounded-lg p-3 flex flex-wrap gap-x-4 gap-y-1">
+        <span><b>{m.training.held_out_photo_style.map50.toFixed(3)}</b> mAP50</span>
+        <span><b>{m.training.held_out_photo_style.map75.toFixed(3)}</b> mAP75</span>
+        <span><b>{m.training.held_out_photo_style.mean_iou.toFixed(3)}</b> mean IoU</span>
+        <span>held-out cards, photo-style{m.training.best_epoch ? ` · best epoch ${m.training.best_epoch}` : ''}</span>
+      </div>
+    )}
+    {m.field_extraction && (
+      <p className="text-[#414753]">
+        Field reading on {m.field_extraction.held_out_cards} held-out cards ({m.field_extraction.fields_checked} fields):{' '}
+        <b>{(m.field_extraction.accuracy_full_page_only * 100).toFixed(1)}%</b> from the full page alone,{' '}
+        <b>{(m.field_extraction.accuracy_with_regions * 100).toFixed(1)}%</b> with located regions.
+      </p>
     )}
     {m.details && (
       <p className="text-[#717785] font-mono text-[10.5px] break-words">
