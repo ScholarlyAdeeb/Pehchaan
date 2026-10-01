@@ -1,0 +1,359 @@
+{
+  "best_epoch": 14,
+  "split": {
+    "train_cards": 960,
+    "val_cards": 240,
+    "val_people": 60
+  },
+  "history": [
+    {
+      "epoch": 2,
+      "loss": 0.3896,
+      "map50": 0.992,
+      "map75": 0.8738,
+      "mean_iou": 0.8547,
+      "map50_clean": 0.9997,
+      "map75_clean": 0.971
+    },
+    {
+      "epoch": 4,
+      "loss": 0.218,
+      "map50": 1.0,
+      "map75": 0.9755,
+      "mean_iou": 0.9075,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9978
+    },
+    {
+      "epoch": 6,
+      "loss": 0.1586,
+      "map50": 1.0,
+      "map75": 0.9943,
+      "mean_iou": 0.9293,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9993
+    },
+    {
+      "epoch": 8,
+      "loss": 0.1193,
+      "map50": 1.0,
+      "map75": 0.9973,
+      "mean_iou": 0.9411,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9993
+    },
+    {
+      "epoch": 10,
+      "loss": 0.0968,
+      "map50": 1.0,
+      "map75": 0.9961,
+      "mean_iou": 0.9484,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9981
+    },
+    {
+      "epoch": 12,
+      "loss": 0.0828,
+      "map50": 1.0,
+      "map75": 0.9975,
+      "mean_iou": 0.9533,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9992
+    },
+    {
+      "epoch": 14,
+      "loss": 0.0775,
+      "map50": 1.0,
+      "map75": 0.9975,
+      "mean_iou": 0.9551,
+      "map50_clean": 1.0,
+      "map75_clean": 0.9996
+    }
+  ],
+  "iou_threshold": 0.5,
+  "selected_on": "photo_style map50",
+  "photo_style": {
+    "map50": 1.0,
+    "map75": 0.9975,
+    "mean_iou": 0.9551,
+    "per_class": {
+      "photo": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9708,
+        "gt": 240
+      },
+      "name": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9465,
+        "gt": 240
+      },
+      "surname": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9493,
+        "gt": 60
+      },
+      "date_of_birth": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9678,
+        "gt": 240
+      },
+      "date_of_issue": {
+        "ap50": 1.0,
+        "ap75": 0.9626,
+        "mean_iou": 0.9267,
+        "gt": 180
+      },
+      "date_of_expiry": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9649,
+        "gt": 120
+      },
+      "document_number": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9651,
+        "gt": 300
+      },
+      "nationality": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9602,
+        "gt": 60
+      },
+      "mrz": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9451,
+        "gt": 120
+      },
+      "address": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.956,
+        "gt": 180
+      },
+      "guardian_name": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9428,
+        "gt": 180
+      },
+      "place_of_birth": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9395,
+        "gt": 60
+      },
+      "gender": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9517,
+        "gt": 120
+      },
+      "qr_code": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9703,
+        "gt": 120
+      },
+      "barcode": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9694,
+        "gt": 60
+      }
+    },
+    "recall_at_score_0.5": {
+      "aadhaar": {
+        "address": 1.0,
+        "date_of_birth": 1.0,
+        "document_number": 1.0,
+        "gender": 1.0,
+        "name": 1.0,
+        "photo": 1.0,
+        "qr_code": 1.0
+      },
+      "driving_license": {
+        "address": 1.0,
+        "date_of_birth": 1.0,
+        "date_of_expiry": 1.0,
+        "date_of_issue": 1.0,
+        "document_number": 1.0,
+        "guardian_name": 1.0,
+        "name": 1.0,
+        "photo": 1.0
+      },
+      "pan": {
+        "date_of_birth": 1.0,
+        "document_number": 1.0,
+        "guardian_name": 1.0,
+        "name": 1.0,
+        "photo": 1.0,
+        "qr_code": 1.0
+      },
+      "passport": {
+        "address": 1.0,
+        "barcode": 1.0,
+        "date_of_birth": 1.0,
+        "date_of_expiry": 1.0,
+        "date_of_issue": 1.0,
+        "document_number": 1.0,
+        "gender": 1.0,
+        "guardian_name": 1.0,
+        "mrz": 1.0,
+        "name": 1.0,
+        "nationality": 1.0,
+        "photo": 1.0,
+        "place_of_birth": 1.0,
+        "surname": 1.0
+      }
+    }
+  },
+  "clean": {
+    "map50": 1.0,
+    "map75": 0.9996,
+    "mean_iou": 0.9658,
+    "per_class": {
+      "photo": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9783,
+        "gt": 240
+      },
+      "name": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9607,
+        "gt": 240
+      },
+      "surname": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9621,
+        "gt": 60
+      },
+      "date_of_birth": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9753,
+        "gt": 240
+      },
+      "date_of_issue": {
+        "ap50": 1.0,
+        "ap75": 0.9944,
+        "mean_iou": 0.9519,
+        "gt": 180
+      },
+      "date_of_expiry": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9757,
+        "gt": 120
+      },
+      "document_number": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9707,
+        "gt": 300
+      },
+      "nationality": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9747,
+        "gt": 60
+      },
+      "mrz": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9333,
+        "gt": 120
+      },
+      "address": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9712,
+        "gt": 180
+      },
+      "guardian_name": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9563,
+        "gt": 180
+      },
+      "place_of_birth": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9534,
+        "gt": 60
+      },
+      "gender": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9703,
+        "gt": 120
+      },
+      "qr_code": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.979,
+        "gt": 120
+      },
+      "barcode": {
+        "ap50": 1.0,
+        "ap75": 1.0,
+        "mean_iou": 0.9735,
+        "gt": 60
+      }
+    },
+    "recall_at_score_0.5": {
+      "aadhaar": {
+        "address": 1.0,
+        "date_of_birth": 1.0,
+        "document_number": 1.0,
+        "gender": 1.0,
+        "name": 1.0,
+        "photo": 1.0,
+        "qr_code": 1.0
+      },
+      "driving_license": {
+        "address": 1.0,
+        "date_of_birth": 1.0,
+        "date_of_expiry": 1.0,
+        "date_of_issue": 1.0,
+        "document_number": 1.0,
+        "guardian_name": 1.0,
+        "name": 1.0,
+        "photo": 1.0
+      },
+      "pan": {
+        "date_of_birth": 1.0,
+        "document_number": 1.0,
+        "guardian_name": 1.0,
+        "name": 1.0,
+        "photo": 1.0,
+        "qr_code": 1.0
+      },
+      "passport": {
+        "address": 1.0,
+        "barcode": 1.0,
+        "date_of_birth": 1.0,
+        "date_of_expiry": 1.0,
+        "date_of_issue": 1.0,
+        "document_number": 1.0,
+        "gender": 1.0,
+        "guardian_name": 1.0,
+        "mrz": 1.0,
+        "name": 1.0,
+        "nationality": 1.0,
+        "photo": 1.0,
+        "place_of_birth": 1.0,
+        "surname": 1.0
+      }
+    }
+  }
+}

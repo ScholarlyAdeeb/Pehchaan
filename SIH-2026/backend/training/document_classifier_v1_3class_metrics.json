@@ -1,0 +1,93 @@
+{
+  "architecture": "MobileNetV2 (torchvision, ImageNet-1K pretrained), final Linear layer replaced",
+  "classes": [
+    "aadhar",
+    "pan",
+    "passport"
+  ],
+  "input_size": [
+    224,
+    224
+  ],
+  "optimizer": "Adam lr=0.001",
+  "epochs": 5,
+  "seed": 26188,
+  "train_images": 722,
+  "validation_images": 180,
+  "validation_accuracy": 1.0,
+  "per_class": {
+    "aadhar": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "pan": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "passport": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  },
+  "confusion_matrix": {
+    "rows_true_cols_pred": [
+      "aadhar",
+      "pan",
+      "passport"
+    ],
+    "matrix": [
+      [
+        60,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0
+      ],
+      [
+        0,
+        0,
+        60
+      ]
+    ]
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.0808,
+      "train_accuracy": 0.9612,
+      "val_accuracy": 1.0
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.0008,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.0001,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.0,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.0,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0
+    }
+  ],
+  "training_seconds": 308.4,
+  "device": "cpu"
+}

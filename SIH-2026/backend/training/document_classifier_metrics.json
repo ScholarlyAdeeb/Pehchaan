@@ -2,6 +2,7 @@
   "architecture": "MobileNetV2 (torchvision, ImageNet-1K pretrained), final Linear layer replaced",
   "classes": [
     "aadhar",
+    "driving_license",
     "pan",
     "passport"
   ],
@@ -9,14 +10,44 @@
     224,
     224
   ],
-  "optimizer": "Adam lr=0.001",
-  "epochs": 5,
+  "optimizer": "Adam lr=0.001, cosine schedule",
+  "epochs": 8,
   "seed": 26188,
-  "train_images": 722,
-  "validation_images": 180,
+  "dataset": "training/data_generated (generated Aadhaar, PAN, driving licence and passport cards)",
+  "split": "by person; the same held-out people as the region detector",
+  "train_images": 960,
+  "validation_images": 240,
   "validation_accuracy": 1.0,
+  "validation_accuracy_photo_style": 1.0,
   "per_class": {
     "aadhar": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "driving_license": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "pan": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "passport": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  },
+  "per_class_photo_style": {
+    "aadhar": {
+      "support": 60,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "driving_license": {
       "support": 60,
       "precision": 1.0,
       "recall": 1.0
@@ -35,6 +66,7 @@
   "confusion_matrix": {
     "rows_true_cols_pred": [
       "aadhar",
+      "driving_license",
       "pan",
       "passport"
     ],
@@ -42,14 +74,57 @@
       [
         60,
         0,
+        0,
         0
       ],
       [
         0,
         60,
+        0,
         0
       ],
       [
+        0,
+        0,
+        60,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        60
+      ]
+    ]
+  },
+  "confusion_matrix_photo_style": {
+    "rows_true_cols_pred": [
+      "aadhar",
+      "driving_license",
+      "pan",
+      "passport"
+    ],
+    "matrix": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        60,
+        0
+      ],
+      [
+        0,
         0,
         0,
         60
@@ -59,35 +134,61 @@
   "history": [
     {
       "epoch": 1,
-      "train_loss": 0.0808,
-      "train_accuracy": 0.9612,
-      "val_accuracy": 1.0
+      "train_loss": 0.1062,
+      "train_accuracy": 0.9646,
+      "val_accuracy": 0.8625,
+      "val_accuracy_photo_style": 0.7667
     },
     {
       "epoch": 2,
-      "train_loss": 0.0008,
-      "train_accuracy": 1.0,
-      "val_accuracy": 1.0
+      "train_loss": 0.0087,
+      "train_accuracy": 0.9979,
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
     },
     {
       "epoch": 3,
-      "train_loss": 0.0001,
+      "train_loss": 0.0007,
       "train_accuracy": 1.0,
-      "val_accuracy": 1.0
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
     },
     {
       "epoch": 4,
-      "train_loss": 0.0,
+      "train_loss": 0.0003,
       "train_accuracy": 1.0,
-      "val_accuracy": 1.0
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
     },
     {
       "epoch": 5,
-      "train_loss": 0.0,
+      "train_loss": 0.0001,
       "train_accuracy": 1.0,
-      "val_accuracy": 1.0
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.0001,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.0003,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.0001,
+      "train_accuracy": 1.0,
+      "val_accuracy": 1.0,
+      "val_accuracy_photo_style": 1.0
     }
   ],
-  "training_seconds": 308.4,
-  "device": "cpu"
+  "training_seconds": 325.0,
+  "device": "cuda"
 }

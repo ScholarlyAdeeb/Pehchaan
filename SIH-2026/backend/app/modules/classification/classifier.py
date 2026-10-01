@@ -41,9 +41,14 @@ class DocumentTypeClassifier:
             from model import DocumentClassifier
 
             self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            self._model = DocumentClassifier(num_classes=3)
-
             model_path = Path(__file__).resolve().parent.parent.parent.parent / "training" / "document_classifier.pth"
+            # The class list is written by training/train.py next to the weights.
+            metrics_path = model_path.with_name(model_path.stem + "_metrics.json")
+            if metrics_path.is_file():
+                import json
+
+                self.classes = list(json.loads(metrics_path.read_text(encoding="utf-8")).get("classes") or self.classes)
+            self._model = DocumentClassifier(num_classes=len(self.classes))
             from app.modules.provenance import model_trusted
 
             if model_path.exists() and not model_trusted("document_classifier"):
@@ -52,7 +57,7 @@ class DocumentTypeClassifier:
             if model_path.exists():
                 # weights_only: a .pth file is a pickle; never execute code from it.
                 self._model.load_state_dict(torch.load(model_path, map_location=self._device, weights_only=True))
-                self._model.eval()
+                self._model.to(self._device).eval()  # inputs are moved to this device in predict
                 logger.info("Loaded document classifier from %s", model_path)
             else:
                 logger.warning("Model weights not found at %s; classifier disabled", model_path)

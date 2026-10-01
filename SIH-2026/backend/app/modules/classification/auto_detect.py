@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from app.config import get_settings
 
 # Classifier label -> pipeline document type
-_CNN_TO_TYPE = {"aadhar": "aadhar", "pan": "pan", "passport": "passport"}
+_CNN_TO_TYPE = {"aadhar": "aadhar", "pan": "pan", "passport": "passport", "driving_license": "driving_license"}
 
 STRONG = 3
 WEAK = 1

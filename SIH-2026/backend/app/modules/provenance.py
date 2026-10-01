@@ -31,6 +31,7 @@ MODEL_FILES = {
     "document_classifier": BACKEND_ROOT / "training" / "document_classifier.pth",
     "face_recognizer_sface": BACKEND_ROOT / "models" / "face" / "face_recognition_sface_2021dec.onnx",
     "face_detector_yunet": BACKEND_ROOT / "models" / "face" / "face_detection_yunet_2023mar.onnx",
+    "region_detector": BACKEND_ROOT / "models" / "localization" / "region_detector.pt",
 }
 RULE_FILES = [
     BACKEND_ROOT / "app" / "modules" / "validation" / "rules_engine.py",

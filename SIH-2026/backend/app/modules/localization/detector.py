@@ -42,6 +42,12 @@ REGION_CLASSES = [
     "mrz",             # 9 - Machine Readable Zone
     "signature",       # 10 - Signature region
     "stamp",           # 11 - Visa/entry stamp
+    "address",         # 12 - Postal address block
+    "guardian_name",   # 13 - Father's / S/D/W-of name
+    "place_of_birth",  # 14
+    "gender",          # 15
+    "qr_code",         # 16 - Aadhaar / PAN QR
+    "barcode",         # 17 - Passport barcode
 ]
 
 # Per-document-type region relevance (which regions to expect)
@@ -49,7 +55,8 @@ DOCUMENT_TYPE_REGIONS = {
     "passport": [
         "photo", "name", "surname", "date_of_birth", 
         "date_of_issue", "date_of_expiry", "document_number",
-        "nationality", "mrz", "signature"
+        "nationality", "mrz", "signature", "address", "guardian_name",
+        "place_of_birth", "gender", "barcode"
     ],
     "visa": [
         "photo", "name", "surname", "date_of_birth",
@@ -63,8 +70,11 @@ DOCUMENT_TYPE_REGIONS = {
     "driving_license": [
         "photo", "name", "surname", "date_of_birth",
         "date_of_issue", "date_of_expiry", "document_number",
-        "nationality"
+        "nationality", "address", "guardian_name"
     ],
+    "aadhar": ["photo", "name", "date_of_birth", "document_number", "address", "gender", "qr_code"],
+    "aadhaar": ["photo", "name", "date_of_birth", "document_number", "address", "gender", "qr_code"],
+    "pan": ["photo", "name", "guardian_name", "date_of_birth", "document_number", "qr_code"],
     "permit": [
         "photo", "name", "date_of_birth",
         "date_of_issue", "date_of_expiry", "document_number"
@@ -147,8 +157,9 @@ class RegionDetectionResult:
     
     def get_text_regions(self) -> list[DocumentRegion]:
         """Get all text field regions (for OCR)."""
-        text_classes = {"name", "surname", "date_of_birth", "date_of_issue", 
-                        "date_of_expiry", "document_number", "nationality"}
+        text_classes = {"name", "surname", "date_of_birth", "date_of_issue",
+                        "date_of_expiry", "document_number", "nationality", "address",
+                        "guardian_name", "place_of_birth", "gender"}
         return [r for r in self.regions if r.class_name in text_classes]
     
     def get_photo_region(self) -> DocumentRegion | None:
@@ -194,6 +205,7 @@ class DocumentRegionDetector:
         self.num_classes = num_classes
         self._model = None
         self._initialized = False
+        self.classes = list(REGION_CLASSES)
     
     def _lazy_init(self):
         """Lazy initialization of the model."""
@@ -206,21 +218,40 @@ class DocumentRegionDetector:
             from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
             from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
             
-            # Build model
-            self._model = fasterrcnn_resnet50_fpn_v2(weights=None)
-            
-            # Replace the classifier head for our number of classes
-            in_features = self._model.roi_heads.box_predictor.cls_score.in_features
-            self._model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
-            
-            # Load custom weights if provided
+            checkpoint = None
             if self.model_path and self.model_path.exists():
-                state_dict = torch.load(self.model_path, map_location=self.device, weights_only=True)
-                self._model.load_state_dict(state_dict)
-                logger.info(f"Loaded custom model from {self.model_path}")
+                checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)
+
+            if isinstance(checkpoint, dict) and "architecture" in checkpoint:
+                # Checkpoint from training/train_region_detector.py: rebuild the exact
+                # architecture it was trained with (wide text anchors, its class list).
+                from torchvision.models.detection import fasterrcnn_resnet50_fpn
+                from torchvision.models.detection.anchor_utils import AnchorGenerator
+                from torchvision.models.detection.rpn import RPNHead
+
+                arch = checkpoint["architecture"]
+                sizes = tuple(tuple(s) for s in arch["anchor_sizes"])
+                ratios = tuple(arch["anchor_ratios"])
+                self.classes = list(checkpoint["classes"])
+                self._model = fasterrcnn_resnet50_fpn(
+                    weights=None, weights_backbone=None, num_classes=len(self.classes),
+                    rpn_anchor_generator=AnchorGenerator(sizes, (ratios,) * len(sizes)),
+                    rpn_head=RPNHead(256, len(ratios)),
+                    min_size=arch["min_size"], max_size=arch["max_size"],
+                )
+                self._model.load_state_dict(checkpoint["model_state"])
+                self.model_version = f"{arch['name']}_regions_e{checkpoint.get('epoch', '?')}"
+                logger.info(f"Loaded region detector from {self.model_path} ({len(self.classes) - 1} classes)")
             else:
-                logger.warning("No custom model weights loaded. Using random initialization.")
-            
+                self._model = fasterrcnn_resnet50_fpn_v2(weights=None)
+                in_features = self._model.roi_heads.box_predictor.cls_score.in_features
+                self._model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
+                if checkpoint is not None:
+                    self._model.load_state_dict(checkpoint)
+                    logger.info(f"Loaded custom model from {self.model_path}")
+                else:
+                    logger.warning("No custom model weights loaded. Using random initialization.")
+
             self._model.to(self.device)
             self._model.eval()
             
@@ -282,7 +313,7 @@ class DocumentRegionDetector:
             if score < self.confidence_threshold:
                 continue
             
-            class_name = REGION_CLASSES[label] if label < len(REGION_CLASSES) else f"class_{label}"
+            class_name = self.classes[label] if label < len(self.classes) else f"class_{label}"
             
             # Apply per-class threshold
             class_threshold = DEFAULT_CONFIDENCE_THRESHOLDS.get(class_name, self.confidence_threshold)
@@ -290,7 +321,7 @@ class DocumentRegionDetector:
                 continue
             
             # Convert to (x, y, w, h)
-            x1, y1, x2, y2 = box.astype(int)
+            x1, y1, x2, y2 = (int(v) for v in box)  # plain ints: the result is serialised to JSON
             bbox = (x1, y1, x2 - x1, y2 - y1)
             
             region = DocumentRegion(
@@ -311,6 +342,7 @@ class DocumentRegionDetector:
             document_type=document_type,
             image_shape=(h, w),
             preprocessing_applied=False,
+            model_version=getattr(self, "model_version", "fasterrcnn_resnet50_fpn_v1"),
         )
     
     def detect_with_preprocessing(
