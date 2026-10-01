@@ -25,10 +25,13 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const refreshState = async () => {
-    setQueueCount(getOfflineQueue().length);
+    const local = getOfflineQueue().length;
+    setQueueCount(local);
     try {
       const status = await checkNeonStatus(token || undefined);
       setNeonStatus(status);
+      // records the gateway is holding on disk until the database is reachable again
+      setQueueCount(local + (status.pendingOutbox || 0));
     } catch {}
   };
 

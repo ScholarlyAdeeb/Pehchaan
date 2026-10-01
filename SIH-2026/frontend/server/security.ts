@@ -10,6 +10,8 @@ export interface AuthPayload {
   checkpointIds: string[];
   fp?: string;
   mustChangePassword?: boolean;
+  /** signed in from this machine's cache while the database was unreachable */
+  offline?: boolean;
 }
 
 // Passwords the old "Create Admin Account" button set. Any account still

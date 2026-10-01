@@ -1,5 +1,8 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { enqueue, pending, pendingCount, syncOutbox, type SyncResult } from './outbox.ts';
+import { localStateEnabled } from './offline-auth.ts';
+import type { RefreshStore, RotateOutcome } from './session.ts';
 import {
   GENESIS_HASH,
   computeScanHash,
@@ -67,6 +70,14 @@ let inMemoryAuditLogs: DbAuditLog[] = [];
 
 let neonPool: Pool | null = null;
 let schemaInitialized = false;
+
+// After a failed write the database is treated as down for a short while, so
+// an offline checkpoint is not held up by a connection timeout on every
+// record; the outbox sync clears this as soon as the database answers.
+const DOWN_BACKOFF_MS = 30_000;
+let neonDownUntil = 0;
+const neonMarkedDown = () => Date.now() < neonDownUntil;
+const markNeonDown = () => { neonDownUntil = Date.now() + DOWN_BACKOFF_MS; };
 
 export function getNeonConnectionString(): string | null {
   return process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || null;
@@ -253,6 +264,8 @@ async function createSchema(): Promise<boolean> {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         ALTER TABLE pehchaan_audit_logs ADD COLUMN IF NOT EXISTS hmac_signature VARCHAR(128);
+        ALTER TABLE pehchaan_anchor_batches ADD COLUMN IF NOT EXISTS fabric_tx VARCHAR(128);
+        ALTER TABLE pehchaan_anchor_batches ADD COLUMN IF NOT EXISTS fabric_anchored_at TIMESTAMP WITH TIME ZONE;
       `);
 
       await client.query(`
@@ -487,6 +500,82 @@ export async function findUserByEmail(email: string): Promise<DbUser | null> {
   }
 }
 
+/**
+ * Like findUserByEmail, but says whether the database answered. A missing user
+ * and an unreachable database must not look the same to the sign-in route:
+ * only the second may fall back to the offline cache.
+ */
+export async function lookupUser(by: { email?: string; id?: string }): Promise<{ reachable: boolean; user: DbUser | null }> {
+  const pool = getNeonPool();
+  if (!pool || neonMarkedDown()) return { reachable: false, user: null };
+  try {
+    if (!schemaInitialized) await initNeonSchema();
+    const res = by.id
+      ? await pool.query('SELECT * FROM pehchaan_users WHERE id = $1', [by.id])
+      : await pool.query('SELECT * FROM pehchaan_users WHERE lower(email) = lower($1)', [by.email]);
+    return { reachable: true, user: res.rows[0] || null };
+  } catch {
+    markNeonDown();
+    return { reachable: false, user: null };
+  }
+}
+
+/** Refresh-token ids, so a token can be used once and a stolen copy is detected. */
+export const refreshStore: RefreshStore = {
+  async save(rec) {
+    const pool = getNeonPool();
+    if (!pool || neonMarkedDown()) throw new Error('database unreachable');
+    try {
+      await ensureRefreshTable();
+      await pool.query(
+        'INSERT INTO pehchaan_refresh_tokens (jti, family, user_id, expires_at) VALUES ($1, $2, $3, $4) ON CONFLICT (jti) DO NOTHING',
+        [rec.jti, rec.family, rec.userId, rec.expiresAt.toISOString()],
+      );
+    } catch (err) { markNeonDown(); throw err; }
+  },
+  async consume(jti): Promise<RotateOutcome> {
+    const pool = getNeonPool();
+    if (!pool || neonMarkedDown()) throw new Error('database unreachable');
+    try {
+      await ensureRefreshTable();
+      const used = await pool.query(
+        `UPDATE pehchaan_refresh_tokens SET used_at = NOW()
+         WHERE jti = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > NOW() RETURNING jti`, [jti]);
+      if (used.rowCount) return 'ok';
+      const seen = await pool.query('SELECT used_at, revoked_at FROM pehchaan_refresh_tokens WHERE jti = $1', [jti]);
+      if (!seen.rowCount) return 'unknown';
+      return seen.rows[0].used_at && !seen.rows[0].revoked_at ? 'reused' : 'unknown';
+    } catch (err) { markNeonDown(); throw err; }
+  },
+  async revokeFamily(family) {
+    const pool = getNeonPool();
+    if (!pool) return;
+    await ensureRefreshTable();
+    await pool.query('UPDATE pehchaan_refresh_tokens SET revoked_at = NOW() WHERE family = $1 AND revoked_at IS NULL', [family]);
+  },
+};
+
+let refreshTableReady = false;
+async function ensureRefreshTable(): Promise<void> {
+  if (refreshTableReady) return;
+  const pool = getNeonPool();
+  if (!pool) throw new Error('database not configured');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pehchaan_refresh_tokens (
+      jti VARCHAR(64) PRIMARY KEY,
+      family VARCHAR(64) NOT NULL,
+      user_id VARCHAR(64) NOT NULL,
+      expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      used_at TIMESTAMP WITH TIME ZONE,
+      revoked_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS pehchaan_refresh_family ON pehchaan_refresh_tokens (family);
+    DELETE FROM pehchaan_refresh_tokens WHERE expires_at < NOW() - INTERVAL '7 days';
+  `);
+  refreshTableReady = true;
+}
+
 export async function countUsers(): Promise<number> {
   const pool = getNeonPool();
   if (!pool) return -1;
@@ -556,23 +645,28 @@ export async function fetchCheckpoints(): Promise<DbCheckpoint[]> {
   }
 }
 
-export async function insertSystemLog(log: DbSystemLog): Promise<void> {
+async function writeSystemLogToNeon(log: DbSystemLog & { timestamp?: string }): Promise<void> {
   const pool = getNeonPool();
-  if (!pool) return;
+  if (!pool) throw new Error('database not configured');
+  if (!schemaInitialized) await initNeonSchema();
+  await pool.query(
+    `INSERT INTO pehchaan_system_logs (actor, role, checkpoint, event, status, reference_id, timestamp)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, NOW()))`,
+    [log.actor, log.role, log.checkpoint, log.event, log.status, log.reference_id || null, log.timestamp || null]
+  );
+}
+
+export async function insertSystemLog(log: DbSystemLog): Promise<void> {
+  if (!getNeonPool()) return;
+  const stamped = { ...log, timestamp: new Date().toISOString() };
+  if (neonMarkedDown() && localStateEnabled()) { enqueue('system', stamped); return; }
   try {
-    if (!schemaInitialized) await initNeonSchema();
-    const client = await pool.connect();
-    try {
-      await client.query(
-        `INSERT INTO pehchaan_system_logs (actor, role, checkpoint, event, status, reference_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [log.actor, log.role, log.checkpoint, log.event, log.status, log.reference_id || null]
-      );
-    } finally {
-      client.release();
-    }
+    await writeSystemLogToNeon(stamped);
   } catch (err) {
-    console.error('Failed to insert system log:', err);
+    if (!localStateEnabled()) { console.error('System log not stored:', (err as Error).message); return; }
+    markNeonDown();
+    enqueue('system', stamped);
+    console.warn('System log queued in the local outbox:', (err as Error).message);
   }
 }
 
@@ -616,7 +710,7 @@ export async function fetchSystemLogs(filters?: {
 
 export async function fetchAllScans(): Promise<DbScanRecord[]> {
   const pool = getNeonPool();
-  if (!pool) {
+  if (!pool || neonMarkedDown()) {
     return inMemoryScans;
   }
 
@@ -635,7 +729,10 @@ export async function fetchAllScans(): Promise<DbScanRecord[]> {
       if (res.rows.length === 0) {
         return inMemoryScans;
       }
-      return res.rows.map(row => ({
+      const queued = inMemoryScans.filter(
+        (q) => q.sync_status === 'QUEUED_LOCAL' && !res.rows.some((row) => row.id === q.id),
+      );
+      return [...queued, ...res.rows.map(row => ({
         id: row.id,
         document_type: row.document_type,
         doc_code: row.doc_code,
@@ -668,110 +765,125 @@ export async function fetchAllScans(): Promise<DbScanRecord[]> {
         checkpoint_id: row.checkpoint_id,
         has_analysis: row.has_analysis,
         created_at: row.created_at,
-      }));
+      }))];
     } finally {
       client.release();
     }
   } catch (err) {
-    console.warn('Neon query failed, using in-memory store-and-forward fallback:', err);
+    markNeonDown();
+    console.warn('Database unreachable; listing locally held scans:', (err as Error).message);
     return inMemoryScans;
+  }
+}
+
+function queueScanLocally(sanitized: DbScanRecord, persist: boolean): DbScanRecord {
+  // Provisional link to the local chain so the record is tamper-evident while
+  // it waits; it is re-linked to the database chain when it is synced.
+  const prevHash = inMemoryScans.length > 0 ? inMemoryScans[0].full_hash : GENESIS_HASH;
+  const fullHash = computeScanHash(prevHash, sanitized);
+  const enriched = {
+    ...sanitized,
+    full_hash: fullHash,
+    hash_proof: abbreviateHash(fullHash),
+    block_height: 'queued',
+    prev_hash: prevHash,
+    sync_status: 'QUEUED_LOCAL',
+  } as DbScanRecord & { prev_hash: string };
+  const existingIdx = inMemoryScans.findIndex((x) => x.id === sanitized.id);
+  if (existingIdx >= 0) inMemoryScans[existingIdx] = enriched;
+  else inMemoryScans.unshift(enriched);
+  if (persist) enqueue('scan', sanitized);
+  return enriched;
+}
+
+/** Writes one scan to the database chain. Throws if it was not stored. */
+async function writeScanToNeon(sanitized: DbScanRecord): Promise<DbScanRecord> {
+  const pool = getNeonPool();
+  if (!pool) throw new Error('database not configured');
+  if (!schemaInitialized) await initNeonSchema();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const lastRow = await client.query(
+      'SELECT full_hash, block_height FROM pehchaan_scans ORDER BY created_at DESC LIMIT 1'
+    );
+    let prevHash = GENESIS_HASH;
+    let blockHeight = 1;
+    if (lastRow.rows.length > 0) {
+      prevHash = lastRow.rows[0].full_hash;
+      const prev = parseInt(String(lastRow.rows[0].block_height).replace('#', ''), 10);
+      blockHeight = (Number.isFinite(prev) ? prev : 0) + 1;
+    }
+
+    const fullHash = computeScanHash(prevHash, sanitized);
+    const hashProof = abbreviateHash(fullHash);
+
+    await client.query(`
+      INSERT INTO pehchaan_scans (
+        id, document_type, doc_code, country_code, country_name, presenter_name,
+        risk_score, risk_verdict, checksum_status, findings, timestamp, local_time,
+        lane, officer, officer_uid, hash_proof, full_hash, block_height, flag_reason,
+        mrz_string, mrz_line2, doc_number, dob, expiry_visual, expiry_mrz,
+        face_match_rate, ela_anomaly_rate, remote_station_id, prev_hash, sync_status,
+        checkpoint_id, analysis, doc_number_hash, provenance_hash, image_fingerprint
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        risk_score = EXCLUDED.risk_score,
+        risk_verdict = EXCLUDED.risk_verdict,
+        checksum_status = EXCLUDED.checksum_status,
+        findings = EXCLUDED.findings,
+        full_hash = EXCLUDED.full_hash,
+        hash_proof = EXCLUDED.hash_proof,
+        block_height = EXCLUDED.block_height,
+        prev_hash = EXCLUDED.prev_hash,
+        sync_status = 'SYNCED'
+    `, [
+      sanitized.id, sanitized.document_type, sanitized.doc_code, sanitized.country_code, sanitized.country_name, sanitized.presenter_name,
+      sanitized.risk_score, sanitized.risk_verdict, sanitized.checksum_status, sanitized.findings, sanitized.timestamp, sanitized.local_time,
+      sanitized.lane, sanitized.officer, sanitized.officer_uid, hashProof, fullHash, `#${blockHeight}`, sanitized.flag_reason || null,
+      sanitized.mrz_string || null, sanitized.mrz_line2 || null, sanitized.doc_number || null, sanitized.dob || null, sanitized.expiry_visual || null, sanitized.expiry_mrz || null,
+      sanitized.face_match_rate || null, sanitized.ela_anomaly_rate || null, sanitized.remote_station_id || null, prevHash, 'SYNCED',
+      sanitized.checkpoint_id || null, sanitized.analysis ? JSON.stringify(sanitized.analysis) : null,
+      sanitized.doc_number_hash || null, sanitized.provenance_hash || null, sanitized.image_fingerprint || null
+    ]);
+
+    await client.query('COMMIT');
+
+    const enriched = { ...sanitized, full_hash: fullHash, hash_proof: hashProof, block_height: `#${blockHeight}`, sync_status: 'SYNCED' };
+    const existingIdx = inMemoryScans.findIndex(s => s.id === sanitized.id);
+    if (existingIdx >= 0) inMemoryScans[existingIdx] = enriched;
+    else inMemoryScans.unshift(enriched);
+
+    return enriched;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
 export async function insertScan(scan: DbScanRecord): Promise<DbScanRecord> {
   const sanitized = sanitizeScanInput(scan) as DbScanRecord;
-
-  const pool = getNeonPool();
-  if (!pool) {
-    const prevHash = inMemoryScans.length > 0 ? inMemoryScans[0].full_hash : GENESIS_HASH;
-    const blockHeight = inMemoryScans.length + 1;
-    const fullHash = computeScanHash(prevHash, sanitized);
-    const enriched = {
-      ...sanitized,
-      full_hash: fullHash,
-      hash_proof: abbreviateHash(fullHash),
-      block_height: `#${blockHeight}`,
-      prev_hash: prevHash,
-      sync_status: 'QUEUED_LOCAL',
-    } as DbScanRecord & { prev_hash: string };
-    inMemoryScans.unshift(enriched);
-    return enriched;
-  }
-
+  if (!getNeonPool()) return queueScanLocally(sanitized, false); // no database configured: in-memory only
+  if (!localStateEnabled()) return writeScanToNeon(sanitized); // no durable disk: fail loudly rather than lose the scan
+  if (neonMarkedDown()) return queueScanLocally(sanitized, true);
   try {
-    if (!schemaInitialized) await initNeonSchema();
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const lastRow = await client.query(
-        'SELECT full_hash, block_height FROM pehchaan_scans ORDER BY created_at DESC LIMIT 1'
-      );
-      let prevHash = GENESIS_HASH;
-      let blockHeight = 1;
-      if (lastRow.rows.length > 0) {
-        prevHash = lastRow.rows[0].full_hash;
-        const prev = parseInt(String(lastRow.rows[0].block_height).replace('#', ''), 10);
-        blockHeight = (Number.isFinite(prev) ? prev : 0) + 1;
-      }
-
-      const fullHash = computeScanHash(prevHash, sanitized);
-      const hashProof = abbreviateHash(fullHash);
-
-      await client.query(`
-        INSERT INTO pehchaan_scans (
-          id, document_type, doc_code, country_code, country_name, presenter_name,
-          risk_score, risk_verdict, checksum_status, findings, timestamp, local_time,
-          lane, officer, officer_uid, hash_proof, full_hash, block_height, flag_reason,
-          mrz_string, mrz_line2, doc_number, dob, expiry_visual, expiry_mrz,
-          face_match_rate, ela_anomaly_rate, remote_station_id, prev_hash, sync_status,
-          checkpoint_id, analysis, doc_number_hash, provenance_hash, image_fingerprint
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-          $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          risk_score = EXCLUDED.risk_score,
-          risk_verdict = EXCLUDED.risk_verdict,
-          checksum_status = EXCLUDED.checksum_status,
-          findings = EXCLUDED.findings,
-          full_hash = EXCLUDED.full_hash,
-          hash_proof = EXCLUDED.hash_proof,
-          block_height = EXCLUDED.block_height,
-          prev_hash = EXCLUDED.prev_hash,
-          sync_status = 'SYNCED'
-      `, [
-        sanitized.id, sanitized.document_type, sanitized.doc_code, sanitized.country_code, sanitized.country_name, sanitized.presenter_name,
-        sanitized.risk_score, sanitized.risk_verdict, sanitized.checksum_status, sanitized.findings, sanitized.timestamp, sanitized.local_time,
-        sanitized.lane, sanitized.officer, sanitized.officer_uid, hashProof, fullHash, `#${blockHeight}`, sanitized.flag_reason || null,
-        sanitized.mrz_string || null, sanitized.mrz_line2 || null, sanitized.doc_number || null, sanitized.dob || null, sanitized.expiry_visual || null, sanitized.expiry_mrz || null,
-        sanitized.face_match_rate || null, sanitized.ela_anomaly_rate || null, sanitized.remote_station_id || null, prevHash, 'SYNCED',
-        sanitized.checkpoint_id || null, sanitized.analysis ? JSON.stringify(sanitized.analysis) : null,
-        sanitized.doc_number_hash || null, sanitized.provenance_hash || null, sanitized.image_fingerprint || null
-      ]);
-
-      await client.query('COMMIT');
-
-      const enriched = { ...sanitized, full_hash: fullHash, hash_proof: hashProof, block_height: `#${blockHeight}`, sync_status: 'SYNCED' };
-      const existingIdx = inMemoryScans.findIndex(s => s.id === sanitized.id);
-      if (existingIdx >= 0) inMemoryScans[existingIdx] = enriched;
-      else inMemoryScans.unshift(enriched);
-
-      return enriched;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    return await writeScanToNeon(sanitized);
   } catch (err) {
-    console.error('Failed to insert scan into Neon:', err);
-    return { ...sanitized, sync_status: 'QUEUED_LOCAL' };
+    markNeonDown();
+    console.warn('Database unreachable; scan kept in the local outbox:', (err as Error).message);
+    return queueScanLocally(sanitized, true);
   }
 }
 
 export async function fetchScanById(id: string): Promise<DbScanRecord | null> {
   const local = () => inMemoryScans.find(s => s.id === id) || null;
+  if (neonMarkedDown()) return local();
   const pool = getNeonPool();
   if (!pool) return local();
   try {
@@ -860,32 +972,82 @@ export async function insertAuditLog(log: DbAuditLog): Promise<DbAuditLog> {
   const newLog = { ...log, id: inMemoryAuditLogs.length + 1, created_at: createdAt, hmac_signature: hmac } as DbAuditLog & { hmac_signature: string };
   inMemoryAuditLogs.unshift(newLog);
 
-  const pool = getNeonPool();
-  if (!pool) {
-    return newLog;
-  }
-
+  if (!getNeonPool()) return newLog;
+  const queued = { ...log, created_at: createdAt, hmac_signature: hmac };
+  if (!localStateEnabled()) return writeAuditLogToNeon(queued);
+  if (neonMarkedDown()) { enqueue('audit', queued); return newLog; }
   try {
-    if (!schemaInitialized) await initNeonSchema();
-    const client = await pool.connect();
-    try {
-      const res = await client.query(`
-        INSERT INTO pehchaan_audit_logs (
-          action, officer, officer_uid, target_id, remote_station, details, hash_proof, hmac_signature, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING *
-      `, [
-        log.action, log.officer, log.officer_uid, log.target_id, log.remote_station || null,
-        log.details, log.hash_proof, hmac, createdAt
-      ]);
-      return res.rows[0];
-    } finally {
-      client.release();
-    }
+    return await writeAuditLogToNeon(queued);
   } catch (err) {
-    console.error('Failed to insert audit log into Neon:', err);
+    markNeonDown();
+    enqueue('audit', queued);
+    console.warn('Audit entry kept in the local outbox:', (err as Error).message);
     return newLog;
   }
+}
+
+/** Stores an already signed audit entry with its original timestamp. Throws if it was not stored. */
+async function writeAuditLogToNeon(
+  log: DbAuditLog & { created_at: string; hmac_signature: string },
+  refreshProof = false,
+): Promise<DbAuditLog> {
+  const pool = getNeonPool();
+  if (!pool) throw new Error('database not configured');
+  if (!schemaInitialized) await initNeonSchema();
+  let hashProof = log.hash_proof;
+  if (refreshProof && log.target_id) {
+    // a queued scan gets its final hash when it joins the database chain
+    const scan = await pool.query('SELECT hash_proof FROM pehchaan_scans WHERE id = $1', [log.target_id]);
+    if (scan.rows[0]?.hash_proof) hashProof = scan.rows[0].hash_proof;
+  }
+  const res = await pool.query(`
+    INSERT INTO pehchaan_audit_logs (
+      action, officer, officer_uid, target_id, remote_station, details, hash_proof, hmac_signature, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *
+  `, [
+    log.action, log.officer, log.officer_uid, log.target_id, log.remote_station || null,
+    log.details, hashProof, log.hmac_signature, log.created_at,
+  ]);
+  return res.rows[0];
+}
+
+// ---- Store-and-forward sync -------------------------------------------------
+
+/** Scans waiting in the outbox become visible again after a restart. */
+export function loadOutboxIntoMemory(): number {
+  const scans = pending().filter((i) => i.kind === 'scan');
+  for (const item of scans) queueScanLocally(item.payload, false);
+  return scans.length;
+}
+
+export function outboxPending(): number {
+  return pendingCount();
+}
+
+/** Replays everything queued while the database was unreachable. */
+export async function syncOutboxToNeon(): Promise<SyncResult> {
+  const pool = getNeonPool();
+  if (!pool) return { synced: 0, failed: 0, remaining: pendingCount(), skipped: 'offline' };
+  const result = await syncOutbox({
+    reachable: async () => {
+      try {
+        await pool.query('SELECT 1');
+        neonDownUntil = 0;
+        return true;
+      } catch {
+        markNeonDown();
+        return false;
+      }
+    },
+    scan: async (payload) => { await writeScanToNeon(payload); },
+    audit: async (payload) => { await writeAuditLogToNeon(payload, true); },
+    system: async (payload) => { await writeSystemLogToNeon(payload); },
+  });
+  if (result.synced > 0) {
+    console.log(`Outbox: synced ${result.synced} queued record(s) to the database; ${result.remaining} remaining.`);
+  }
+  return result;
 }
 
 export async function verifyChainIntegrity(): Promise<{

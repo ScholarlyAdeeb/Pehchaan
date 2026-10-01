@@ -115,7 +115,17 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="material-symbols-outlined text-[16px] text-[#60a5fa]">person</span>
               </span>
               <div className="hidden md:block leading-tight">
-                <div className="text-xs font-semibold text-white">{user?.name || 'User'}</div>
+                <div className="text-xs font-semibold text-white">
+                  {user?.name || 'User'}
+                  {user?.offline && (
+                    <span
+                      className="ml-2 px-1.5 py-0.5 rounded bg-[#4a3200] text-[#ffd27a] text-[10px] font-semibold"
+                      title="The database is unreachable. You were verified from this machine's sealed copy; scans are queued and will sync."
+                    >
+                      Offline sign-in
+                    </span>
+                  )}
+                </div>
                 <div className="text-[10px] text-[#8a94a6]">{roleLabel}</div>
               </div>
               <span className="material-symbols-outlined text-[16px] text-[#717785]">expand_more</span>

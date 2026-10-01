@@ -18,6 +18,8 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   checkpointIds: string[];
+  /** signed in from this machine's cache while the database was unreachable */
+  offline?: boolean;
 }
 
 export interface Checkpoint {
@@ -156,6 +158,12 @@ export interface ScreeningAnalysis {
     engine_available: boolean;
     warning?: string | null;
     extracted_fields: Record<string, unknown>;
+    /** how many located field boxes were read on their own */
+    text_regions_used?: number;
+    /** field key -> "region" (read from a located box) | "page+region" (both readings agree) */
+    field_sources?: Record<string, string>;
+    layout_recognised?: boolean;
+    layout_note?: string;
   };
   mrz?: {
     detected: boolean;
@@ -197,6 +205,14 @@ export interface ScreeningAnalysis {
     issues: ValidationIssue[];
     summary: string;
     risk: number | null;
+    /** comparison with the issued-documents database */
+    reference?: {
+      status: 'not_checked' | 'unavailable' | 'not_found' | 'match' | 'mismatch';
+      summary: string;
+      database_size: number;
+      fields: { field: string; on_document: string | null; in_database: string | null; match: boolean }[];
+      mismatched: string[];
+    } | null;
   } | null;
   risk: {
     risk_score: number;
@@ -258,6 +274,8 @@ export interface NeonTelemetryStatus {
   latencyMs: number;
   mode: string;
   message: string;
+  /** records queued on the gateway while the database was unreachable */
+  pendingOutbox?: number;
 }
 
 export interface IcaoRule {
