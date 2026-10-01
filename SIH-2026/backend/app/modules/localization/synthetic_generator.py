@@ -42,6 +42,39 @@ REGION_COLORS = {
 }
 
 
+#: Photo placeholder geometry for the synthetic canvases, as
+#: ``(width, height, right_margin, top)``.  These are the plain 900x600 mock
+#: documents this module draws, *not* the real Indian cards, so the measured
+#: holders in ``photo_regions.REGIONS`` deliberately do not apply here.
+SYNTHETIC_PHOTO_BOX = (180, 220, 220, 80)
+PHOTO_FILL = (200, 200, 200)
+PHOTO_OUTLINE = (100, 100, 100)
+
+
+def photo_box(canvas_width: int) -> tuple[int, int, int, int]:
+    """``(x, y, w, h)`` of the photo holder on a synthetic canvas."""
+    w, h, right, top = SYNTHETIC_PHOTO_BOX
+    return canvas_width - right, top, w, h
+
+
+def draw_photo_placeholder(
+    draw,
+    annotations: list,
+    canvas_width: int,
+    font=None,
+) -> None:
+    """Draw the grey photo box and record its annotation.
+
+    Was previously repeated verbatim in all five document generators; they all
+    wanted the same box, so it now lives here once.
+    """
+    x, y, w, h = photo_box(canvas_width)
+    draw.rectangle([x, y, x + w, y + h], outline=PHOTO_OUTLINE, width=2, fill=PHOTO_FILL)
+    if font is not None:
+        draw.text((x + 40, y + 100), "PHOTO", fill=PHOTO_OUTLINE, font=font)
+    annotations.append(RegionAnnotation("photo", (x, y, w, h)))
+
+
 @dataclass
 class RegionAnnotation:
     """Ground truth region annotation for a synthetic document."""
@@ -142,17 +175,7 @@ class SyntheticDocumentGenerator:
         
         # Visual zone fields
         # Photo region (right side, upper portion)
-        photo_x = self.w - 220
-        photo_y = 80
-        photo_w = 180
-        photo_h = 220
-        # Draw photo placeholder
-        draw.rectangle(
-            [photo_x, photo_y, photo_x + photo_w, photo_y + photo_h],
-            outline=(100, 100, 100), width=2, fill=(200, 200, 200)
-        )
-        draw.text((photo_x + 40, photo_y + 100), "PHOTO", fill=(100, 100, 100), font=font_small)
-        annotations.append(RegionAnnotation("photo", (photo_x, photo_y, photo_w, photo_h)))
+        draw_photo_placeholder(draw, annotations, self.w, font=font_small)
         
         # Name fields (left side)
         name_x = 30
@@ -270,12 +293,7 @@ class SyntheticDocumentGenerator:
         y_pos += 50
         
         # Photo
-        photo_x = self.w - 220
-        photo_y = 80
-        photo_w = 180
-        photo_h = 220
-        draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], outline=(100,100,100), width=2, fill=(200,200,200))
-        annotations.append(RegionAnnotation("photo", (photo_x, photo_y, photo_w, photo_h)))
+        draw_photo_placeholder(draw, annotations, self.w)
         
         # Fields
         name_x = 30
@@ -338,12 +356,7 @@ class SyntheticDocumentGenerator:
         y_pos += 50
         
         # Photo
-        photo_x = self.w - 220
-        photo_y = 80
-        photo_w = 180
-        photo_h = 220
-        draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], outline=(100,100,100), width=2, fill=(200,200,200))
-        annotations.append(RegionAnnotation("photo", (photo_x, photo_y, photo_w, photo_h)))
+        draw_photo_placeholder(draw, annotations, self.w)
         
         name_x = 30
         name_y = y_pos
@@ -385,12 +398,7 @@ class SyntheticDocumentGenerator:
         y_pos += 50
         
         # Photo
-        photo_x = self.w - 220
-        photo_y = 80
-        photo_w = 180
-        photo_h = 220
-        draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], outline=(100,100,100), width=2, fill=(200,200,200))
-        annotations.append(RegionAnnotation("photo", (photo_x, photo_y, photo_w, photo_h)))
+        draw_photo_placeholder(draw, annotations, self.w)
         
         name_x = 30
         name_y = y_pos
@@ -434,12 +442,7 @@ class SyntheticDocumentGenerator:
         y_pos += 50
         
         # Photo
-        photo_x = self.w - 220
-        photo_y = 80
-        photo_w = 180
-        photo_h = 220
-        draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], outline=(100,100,100), width=2, fill=(200,200,200))
-        annotations.append(RegionAnnotation("photo", (photo_x, photo_y, photo_w, photo_h)))
+        draw_photo_placeholder(draw, annotations, self.w)
         
         name_x = 30
         name_y = y_pos
