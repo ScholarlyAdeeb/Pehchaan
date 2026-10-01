@@ -30,12 +30,14 @@ UB-Mannheim build; include the Hindi/Nepali language packs if you want them).
 start_all.bat
 ```
 
-That creates the Python virtualenv, installs dependencies and opens two windows:
+That creates the Python virtualenv, installs dependencies, generates secrets, issues the
+TLS certificates for the gateway-engine link, builds the issued-documents database if the
+generated dataset is present, and opens two windows:
 
 | Service | URL | What it is |
 |---|---|---|
 | Web app + API gateway | http://localhost:3000 | React UI, login/roles, Neon storage, hash chain (Express, `frontend/server.ts`) |
-| Screening engine | http://127.0.0.1:8000/docs | FastAPI — all AI/OCR/forensics (`backend/app`) |
+| Screening engine | https://127.0.0.1:8000 | FastAPI — all AI/OCR/forensics (`backend/app`). Mutual TLS: only the gateway can call it |
 
 Manual start (two terminals):
 
@@ -44,7 +46,8 @@ Manual start (two terminals):
 cd backend
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --port 8000
+python -m scripts.make_tls_certs      # once: certificates for the gateway-engine link
+python run_engine.py                  # HTTPS + client certificate when backend/certs exists
 
 # frontend
 cd frontend
@@ -55,6 +58,12 @@ npm run dev
 Configuration: copy `backend/.env.example` → `backend/.env` and `frontend/.env.example` →
 `frontend/.env`. Put the same Neon connection string in both (the engine reads earlier
 screenings for the records cross-check). Set `TESSERACT_CMD` if Tesseract is not on PATH.
+
+Optional Hyperledger Fabric ledger (needs Docker): `bash fabric/network.sh up`.
+
+Architecture and measured results: [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md).
+Hosting the dashboard and gateway on Vercel: [`docs/DEPLOYMENT_VERCEL.md`](docs/DEPLOYMENT_VERCEL.md)
+(set the Vercel project's Root Directory to `SIH-2026/frontend`).
 
 **First login:** on an empty database the sign-in page offers *Create Admin Account*, which
 seeds an admin, an officer and a post in-charge for checkpoint `CP-001`.

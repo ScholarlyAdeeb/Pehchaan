@@ -52,7 +52,7 @@ echo   Ports clear.
 echo.
 
 REM ---- Backend setup ----
-echo [1/4] Checking backend virtual environment...
+echo [1/5] Checking backend virtual environment...
 
 if not exist "%BACKEND_DIR%\.venv\Scripts\activate.bat" (
     echo   Creating venv...
@@ -73,14 +73,14 @@ if not exist "%BACKEND_DIR%\.venv\Scripts\activate.bat" (
     echo   venv found.
 )
 
-echo [2/4] Installing backend dependencies...
+echo [2/5] Installing backend dependencies...
 call "%BACKEND_DIR%\.venv\Scripts\activate.bat"
 pip install -q -r "%BACKEND_DIR%\requirements.txt" 2>nul
 echo   Dependencies ready.
 call deactivate 2>nul
 
 REM ---- Frontend setup ----
-echo [3/4] Checking frontend dependencies...
+echo [3/5] Checking frontend dependencies...
 
 if not exist "%FRONTEND_DIR%\node_modules" (
     echo   Running npm install...
@@ -91,11 +91,43 @@ if not exist "%FRONTEND_DIR%\node_modules" (
     echo   node_modules found.
 )
 
-echo [4/4] Starting servers...
+echo [4/5] Preparing secrets and the issued-documents database...
+
+REM The engine reads ENGINE_API_KEY and PII_HASH_KEY from backend\.env at start-up,
+REM so they must exist before it is launched (the gateway would otherwise create
+REM them only after the engine is already running without them).
+cd /d "%FRONTEND_DIR%"
+call npx tsx server/bootstrap-secrets.ts
+cd /d "%ROOT_DIR%"
+
+REM Mutual TLS between gateway and engine: issue the certificates once.
+if not exist "%BACKEND_DIR%\certs\engine.pem" (
+    echo   Issuing TLS certificates for the gateway-engine link...
+    cd /d "%BACKEND_DIR%"
+    call .venv\Scripts\python.exe -m scripts.make_tls_certs
+    cd /d "%ROOT_DIR%"
+) else (
+    echo   TLS certificates found.
+)
+
+if not exist "%BACKEND_DIR%\data\registry\issued_documents.sqlite" (
+    if exist "%BACKEND_DIR%\training\data_generated\annotations" (
+        echo   Building issued-documents database from the generated dataset...
+        cd /d "%BACKEND_DIR%"
+        call .venv\Scripts\python.exe -m scripts.build_issued_documents_db
+        cd /d "%ROOT_DIR%"
+    ) else (
+        echo   No generated dataset found: issued-documents check will report "unavailable".
+    )
+) else (
+    echo   Issued-documents database found.
+)
+
+echo [5/5] Starting servers...
 echo.
 
 REM ---- Start backend in a new window ----
-start "Pehchaan Backend" cmd /k "cd /d %BACKEND_DIR% && call .venv\Scripts\activate.bat && echo Backend starting on http://localhost:8000 && uvicorn app.main:app --reload --port 8000"
+start "Pehchaan Backend" cmd /k "cd /d %BACKEND_DIR% && call .venv\Scripts\activate.bat && echo Backend starting on https://127.0.0.1:8000 (mutual TLS) && python run_engine.py --reload"
 
 REM Give backend a moment to start
 timeout /t 3 /nobreak >nul
@@ -107,8 +139,7 @@ echo.
 echo ============================================================
 echo   Both servers starting in separate windows:
 echo.
-echo   Backend API:   http://localhost:8000
-echo   Backend Docs:  http://localhost:8000/docs
+echo   Backend API:   https://127.0.0.1:8000  (mutual TLS: only the gateway can call it)
 echo   Frontend App:  http://localhost:3000
 echo   Neon Status:   http://localhost:3000/api/neon/status
 echo ============================================================
