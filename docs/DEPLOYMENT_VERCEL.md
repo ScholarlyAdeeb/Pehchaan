@@ -12,8 +12,8 @@ network, which must run on a machine you control.
 | Screening engine (Python) | A VM or the checkpoint machine | PyTorch, Tesseract and a 166 MB model exceed Vercel's 250 MB function limit; it also wants a GPU. |
 | Fabric peer and orderer | A VM or the checkpoint machine | Long-running nodes with a ledger on disk. |
 
-Status: the function entry was exercised locally against the bundled gateway
-(health, auth, 404 fallback, cron secret). It has **not** been deployed to
+Status: the function entry was exercised locally against the bundled gateway,
+in a folder with no `node_modules` (health, auth, 404 fallback, cron secret). It has **not** been deployed to
 Vercel from this repository; the first deployment is the real test.
 
 ## 1. Engine host
@@ -57,9 +57,13 @@ and the PostgreSQL chain work as before.
 
 ## 3. Vercel project
 
-- Root directory: `SIH-2026/frontend` (it contains `vercel.json`).
-- Build: `npm run build` produces `dist/` (dashboard) and
-  `dist-server/app.cjs` (the bundled gateway that `api/index.js` loads).
+- Root directory: the repository root (leave Vercel's default). `vercel.json`
+  there sets the install command, build command and output directory, so no
+  build settings need to be entered in the Vercel dashboard.
+- Build: `npm run build --prefix frontend` produces `frontend/dist/`
+  (dashboard) and `frontend/dist-server/app.cjs` (the bundled gateway that
+  `api/index.js` loads). The bundle contains its own dependencies, so the
+  function does not ship `node_modules`.
 - Environment variables (Production):
 
 | Variable | Value |

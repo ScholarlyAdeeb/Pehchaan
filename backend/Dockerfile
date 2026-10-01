@@ -13,5 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# run_engine.py serves HTTPS with a required client certificate when
+# /app/certs exists (mount the output of scripts/make_tls_certs.py there) and
+# refuses to listen on a public address without it.
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "run_engine.py", "--host", "0.0.0.0", "--port", "8000"]

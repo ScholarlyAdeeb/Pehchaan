@@ -1,7 +1,7 @@
 # Backend — AI Document Screening API
 
 FastAPI service implementing all four pipeline modules. See
-[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for the design rationale.
+[../docs/TECHNICAL_ARCHITECTURE.md](../docs/TECHNICAL_ARCHITECTURE.md) for the design rationale.
 
 ## Setup
 

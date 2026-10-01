@@ -74,10 +74,8 @@ if not exist "%BACKEND_DIR%\.venv\Scripts\activate.bat" (
 )
 
 echo [2/5] Installing backend dependencies...
-call "%BACKEND_DIR%\.venv\Scripts\activate.bat"
-pip install -q -r "%BACKEND_DIR%\requirements.txt" 2>nul
+"%BACKEND_DIR%\.venv\Scripts\python.exe" -m pip install -q -r "%BACKEND_DIR%\requirements.txt" 2>nul
 echo   Dependencies ready.
-call deactivate 2>nul
 
 REM ---- Frontend setup ----
 echo [3/5] Checking frontend dependencies...

@@ -1,10 +1,9 @@
 # ===========================================================================
-# PEHCHAAN / SIH-2026 — repository ignore rules
+# PEHCHAAN — repository ignore rules
 #
-# Single source of truth. The nested SIH-2026/.gitignore and
-# SIH-2026/frontend/.gitignore files were removed: every rule they carried was
-# already covered here, because directory-agnostic patterns such as `.env`,
-# `node_modules/`, `dist/` and `.venv/` match at any depth.
+# Single source of truth: there are no nested .gitignore files, because
+# directory-agnostic patterns such as `.env`, `node_modules/`, `dist/` and
+# `.venv/` match at any depth.
 # ===========================================================================
 
 # --- Byte-compiled / optimised Python --------------------------------
@@ -124,53 +123,53 @@ Thumbs.db
 # ===========================================================================
 
 # Raw source dataset. The canonical training copy lives in
-# SIH-2026/backend/training/data (902 images); DATASET/ was a byte-identical
+# backend/training/data (902 images); DATASET/ was a byte-identical
 # duplicate of it and has been deleted along with its zip.
 DATASET/
 *.zip
 
 # The 902 training images themselves.
-SIH-2026/backend/training/data/
+backend/training/data/
 
 # Images produced by backend/scripts/cardgen (1200 cards, ~226 MB). Regenerable
 # from sample-data/templates/mock_government_ids_300.xlsx, so like the 902 above
 # they stay on disk only. The generator itself IS tracked.
-SIH-2026/backend/training/data_generated/
-SIH-2026/backend/scripts/cardgen/preview/
+backend/training/data_generated/
+backend/scripts/cardgen/preview/
 
 # Gateway store-and-forward outbox: scans queued while the database was
 # unreachable. Holds personal data and belongs to one machine only.
-SIH-2026/frontend/data/
+frontend/data/
 
 # Local issued-documents database (built per machine with its own PII_HASH_KEY)
 # and scratch output of the trainers.
-SIH-2026/backend/data/registry/
-SIH-2026/backend/training/.region_preview.jpg
+backend/data/registry/
+backend/training/.region_preview.jpg
 
 # Fabric network: generated identities (private keys named priv_sk), channel
 # blocks and vendored chaincode dependencies. Recreated by fabric/network.sh.
-SIH-2026/fabric/network/organizations/
-SIH-2026/fabric/network/channel-artifacts/
-SIH-2026/fabric/chaincode/*/vendor/
+fabric/network/organizations/
+fabric/network/channel-artifacts/
+fabric/chaincode/*/vendor/
 
 # Vercel CLI link/state for this machine.
 .vercel/
 
 # Bundled gateway for the Vercel function (built by `npm run build`).
-SIH-2026/frontend/dist-server/
+frontend/dist-server/
 .npm-cache/
 
 # TLS material for the gateway-engine link (backend/scripts/make_tls_certs.py).
-SIH-2026/backend/certs/
+backend/certs/
 .pip-cache/
 
 # Generated marketing-video output (its media is never committed).
-SIH-2026/frontend/brag-output/
+frontend/brag-output/
 
 # Reference and demo ID documents: kept on disk, never committed.
 # sample-data/README.md is tracked; everything else below it stays local.
-SIH-2026/sample-data/**
-!SIH-2026/sample-data/README.md
+sample-data/**
+!sample-data/README.md
 
 # Personal reference material moved out of the repo root. Ignored as a whole
 # directory so a new file type dropped in here does not become untracked

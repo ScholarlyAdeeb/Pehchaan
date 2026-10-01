@@ -20,7 +20,7 @@ derived profile, and the field values that were typeset onto it.
 ## Run it
 
 ```bash
-cd SIH-2026/backend
+cd backend
 python scripts/cardgen/extract_layouts.py     # once: recover the card layouts
 python scripts/cardgen/faces.py               # once: harvest 300 portraits
 python scripts/cardgen/preview_regions.py      # the accuracy gate (see below)
