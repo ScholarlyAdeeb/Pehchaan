@@ -1,0 +1,12 @@
+{
+  "appId": "in.gov.pehchaan.app",
+  "appName": "PEHCHAAN",
+  "webDir": "www",
+  "server": {
+    "url": "https://tumharipehchaan.vercel.app",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "backgroundColor": "#0a203b"
+  }
+}

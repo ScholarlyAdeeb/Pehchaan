@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PEHCHAAN — no connection</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: #0a203b; color: #e8edf5;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px; box-sizing: border-box; text-align: center;
+      }
+      main { max-width: 360px; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      p { font-size: 15px; line-height: 1.5; margin: 0 0 24px; color: #b9c4d6; }
+      button {
+        font: inherit; font-weight: 600; color: #0a203b; background: #ffffff;
+        border: 0; border-radius: 10px; min-height: 48px; padding: 0 28px;
+      }
+      button:focus-visible { outline: 3px solid #ff9933; outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Cannot reach the PEHCHAAN server</h1>
+      <p>Check that this phone has an internet connection, then try again. Screening needs the server, so nothing can be scanned while it is unreachable.</p>
+      <button id="retry" type="button">Try again</button>
+    </main>
+    <script>
+      // capacitor.config.json decides which server the app opens; going back
+      // to the app's start address makes it load that server again.
+      document.getElementById('retry').addEventListener('click', function () {
+        window.location.replace('https://tumharipehchaan.vercel.app/');
+      });
+    </script>
+  </body>
+</html>

@@ -212,3 +212,7 @@ BIBLIOGRAPHY.md
 # Office lock files.
 ~$*.pptx
 ~$*.docx
+
+# Android app builds (rebuilt from mobile/; shared as a release file, not in git).
+*.apk
+*.aab
