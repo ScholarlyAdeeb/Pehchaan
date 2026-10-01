@@ -193,12 +193,28 @@ def build_evaluation(
                 "no match", "no match", "pass", "Not seen among documents rejected as forged.",
             ))
 
-    # 9. Records
+    # 9. Issued-documents database
+    ref = getattr(records, "reference", None) if records is not None else None
+    if ref and ref["status"] in ("match", "mismatch", "not_found"):
+        compared = [f for f in ref["fields"] if f["on_document"]]
+        rows.append(EvalRow(
+            "Issuing records", "Database comparison (document number -> holder name, date of birth, expiry)",
+            "; ".join(f"{f['field'].replace('_', ' ')} {'=' if f['match'] else '≠'} {f['in_database']}" for f in compared)
+            or ("number not in database" if ref["status"] == "not_found" else "number found"),
+            "same holder details as issued",
+            {"match": "pass", "mismatch": "fail", "not_found": "skip"}[ref["status"]],
+            ref["summary"],
+        ))
+
+    # 10. Earlier screenings
     if records is not None:
-        status = {"conflict": "fail", "flagged_history": "warn", "consistent": "pass"}.get(records.status, "skip")
+        history = getattr(records, "history_status", "") or records.status
+        status = {"conflict": "fail", "flagged_history": "warn", "consistent": "pass"}.get(history, "skip")
+        history_issues = [i for i in records.issues if i.code != "ISSUING_RECORD_MISMATCH"]
         rows.append(EvalRow(
             "Earlier screenings", "Database entry comparison (same document number)",
             f"{records.prior_count} earlier record(s)", "same name and DOB every time", status,
-            records.issues[0].message if records.issues and status in ("fail", "warn") else records.summary,
+            history_issues[0].message if history_issues and status in ("fail", "warn")
+            else (getattr(records, "history_summary", "") or records.summary),
         ))
     return rows

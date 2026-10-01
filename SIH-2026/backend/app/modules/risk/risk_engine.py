@@ -119,7 +119,7 @@ def _face_component(face_match: FaceMatchResult | None, weight: float, threshold
 
 
 def _records_component(records, weight: float) -> RiskComponent:
-    label = "Records history (earlier screenings)"
+    label = "Records (issuing database + earlier screenings)"
     if records is None or records.risk is None:
         summary = records.summary if records is not None else "Records check did not run."
         return RiskComponent("records", label, False, None, weight, explanation=summary)
@@ -176,7 +176,10 @@ def compute_risk(
     if tampering.verdict == "tampered":
         floor_reasons.append("forensics verdict is 'tampered'")
     if records is not None and records.status == "conflict":
-        floor_reasons.append("identity conflicts with earlier screening records")
+        floor_reasons.append(
+            "identity conflicts with the issuing records"
+            if (records.reference or {}).get("status") == "mismatch"
+            else "identity conflicts with earlier screening records")
     if floor_reasons and risk_score < OVERRIDE_FLOOR:
         overrides.append(
             f"Raised from {risk_score} to {OVERRIDE_FLOOR}: " + "; ".join(floor_reasons)

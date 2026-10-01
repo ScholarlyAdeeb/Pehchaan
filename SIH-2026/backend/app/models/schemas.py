@@ -39,6 +39,12 @@ class OCRSummary(BaseModel):
     extracted_fields: dict[str, Any] = {}
     region_detection: Optional[RegionDetectionModel] = None
     text_regions_used: int = 0
+    # which fields were read from a detected region: key -> "region" | "page+region"
+    field_sources: dict[str, str] = {}
+    # region readings are used only when the detections look like a known card layout
+    layout_recognised: bool = False
+    layout_note: str = ""
+    region_reads: list[dict[str, Any]] = []
 
 
 class MRZField(BaseModel):
@@ -182,6 +188,10 @@ class RecordCheckSummary(BaseModel):
     issues: list[ValidationIssueModel] = []
     summary: str = ""
     risk: int | None = None
+    # issued-documents database comparison: status, summary, database_size, fields[], mismatched[]
+    reference: dict[str, Any] | None = None
+    history_status: str = ""
+    history_summary: str = ""
 
 
 class EvalRowModel(BaseModel):

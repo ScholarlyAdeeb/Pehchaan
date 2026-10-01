@@ -52,9 +52,11 @@ class Settings:
     TESSERACT_CMD: str | None = _get_tesseract_cmd()
 
     # --- Document Localization (Faster R-CNN) ---
-    LOCALIZATION_MODEL_PATH: str | None = os.getenv("LOCALIZATION_MODEL_PATH")
+    # Trained by training/train_region_detector.py; used automatically when the file is present.
+    LOCALIZATION_MODEL_PATH: str | None = os.getenv("LOCALIZATION_MODEL_PATH") or str(
+        BACKEND_ROOT / "models" / "localization" / "region_detector.pt")
     LOCALIZATION_CONFIDENCE: float = float(os.getenv("LOCALIZATION_CONFIDENCE", "0.5"))
-    LOCALIZATION_DEVICE: str = os.getenv("LOCALIZATION_DEVICE", "cpu")
+    LOCALIZATION_DEVICE: str = os.getenv("LOCALIZATION_DEVICE", "auto")  # auto = GPU when available, else CPU
     LOCALIZATION_ENABLED: bool = os.getenv("LOCALIZATION_ENABLED", "true").lower() == "true"
 
     # --- Tampering detection thresholds (tunable without code changes) ---

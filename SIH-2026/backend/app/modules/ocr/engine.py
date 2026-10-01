@@ -14,6 +14,8 @@ frontend can surface, instead of crashing the whole scan.
 from __future__ import annotations
 
 import logging
+import threading
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -71,6 +73,7 @@ class OCRResult:
     # New fields for region-aware OCR
     region_detection: Optional[dict] = None  # Serialized RegionDetectionResult
     text_regions_used: int = 0
+    region_reads: list = field(default_factory=list)  # per-box Tesseract readings (region_fields.RegionRead)
 
 
 def _configure_tesseract() -> None:
@@ -90,86 +93,49 @@ def _run_localization(image: np.ndarray, document_type: str) -> Optional[dict]:
     if not model_path or not Path(model_path).is_file():
         logger.info("Localization skipped — no trained model at %s", model_path)
         return None
+    if not _region_model_trusted(str(Path(model_path).resolve())):
+        return None
 
     try:
-        from app.modules.localization.detector import create_detector
-
-        detector = create_detector(
-            model_path=model_path,
-            confidence_threshold=settings.LOCALIZATION_CONFIDENCE,
-            device=settings.LOCALIZATION_DEVICE,
-        )
-        result = detector.detect_with_preprocessing(image, document_type)
+        detector = _cached_detector(model_path, settings.LOCALIZATION_CONFIDENCE, settings.LOCALIZATION_DEVICE)
+        # The detector is trained on raw card images, so it runs on the original
+        # pixels: deskewing here would shift every box away from the image the
+        # rest of the pipeline reads. Regions are not filtered by document type
+        # here because in auto-detect mode the type is not final yet; the field
+        # merge only uses the classes that belong to the final type.
+        with _detector_lock:
+            result = detector.detect(image, None)
+        result.document_type = document_type
         return result.to_dict() if result.regions else None
     except Exception as e:
-        logger.warning(f"Localization failed, falling back to full-image OCR: {e}")
+        logger.warning(f"Localization failed, continuing with full-image OCR only: {e}")
         return None
 
 
-def _run_ocr_on_regions(image: np.ndarray, region_result: dict) -> tuple[str, list[OCRWord], float, int]:
-    """Run Tesseract OCR on detected text regions."""
-    if not _TESSERACT_AVAILABLE:
-        return "", [], 0.0, 0
-    
-    _configure_tesseract()
-    
-    text_regions = region_result.get("regions", [])
-    # Filter for text regions
-    text_region_classes = {"name", "surname", "date_of_birth", "date_of_issue", 
-                          "date_of_expiry", "document_number", "nationality"}
-    
-    all_words: list[OCRWord] = []
-    all_confidences: list[float] = []
-    all_text_parts: list[str] = []
-    regions_processed = 0
-    
-    for region in text_regions:
-        if region["class_name"] not in text_region_classes:
-            continue
-        
-        x, y, w, h = region["bbox"]["x"], region["bbox"]["y"], region["bbox"]["w"], region["bbox"]["h"]
-        if w <= 0 or h <= 0:
-            continue
-        
-        # Crop region with small padding
-        pad = 5
-        x1 = max(0, x - pad)
-        y1 = max(0, y - pad)
-        x2 = min(image.shape[1], x + w + pad)
-        y2 = min(image.shape[0], y + h + pad)
-        region_img = image[y1:y2, x1:x2]
-        
-        if region_img.size == 0:
-            continue
-        
-        try:
-            data = pytesseract.image_to_data(
-                region_img, output_type=Output.DICT, config="--oem 3 --psm 7"  # Single line
-            )
-        except Exception as e:
-            logger.warning(f"OCR failed on region {region['class_name']}: {e}")
-            continue
-        
-        regions_processed += 1
-        
-        for i, text in enumerate(data["text"]):
-            text = text.strip()
-            if not text:
-                continue
-            conf = float(data["conf"][i]) if data["conf"][i] != "-1" else 0.0
-            # Adjust box coordinates to global image space
-            box = (
-                data["left"][i] + x1,
-                data["top"][i] + y1,
-                data["width"][i],
-                data["height"][i]
-            )
-            all_words.append(OCRWord(text=text, confidence=conf, box=box))
-            all_confidences.append(conf)
-            all_text_parts.append(text)
-    
-    mean_conf = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
-    return " ".join(all_text_parts), all_words, round(mean_conf, 2), regions_processed  # type: ignore[return-value]
+_detector_lock = threading.Lock()
+
+
+@lru_cache(maxsize=4)
+def _region_model_trusted(resolved_path: str) -> bool:
+    """Refuse a default-location model whose hash differs from model_manifest.json."""
+    from app.modules.provenance import MODEL_FILES, model_trusted
+
+    if resolved_path != str(MODEL_FILES["region_detector"].resolve()):
+        return True  # a custom path set by the operator is outside the manifest
+    return model_trusted("region_detector")
+
+
+@lru_cache(maxsize=2)
+def _cached_detector(model_path: str, confidence: float, device: str):
+    """One loaded model per process instead of a reload from disk on every request."""
+    from app.modules.localization.detector import create_detector
+
+    if device == "auto":
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    return create_detector(model_path=model_path, confidence_threshold=confidence, device=device)
 
 
 def _is_mrz_word(text: str) -> bool:
@@ -225,10 +191,9 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
 
     Pipeline:
     1. Image preprocessing (deskew, denoise, contrast enhance)
-    2. Document Region Localization (Faster R-CNN) — if enabled
-    3. Targeted OCR on detected text regions — if localization succeeds
-    4. Fallback to full-image OCR — if localization fails or disabled
-    5. For passports: second MRZ-tuned pass on the bottom of the page
+    2. Document Region Localization (Faster R-CNN) — if a trained model is configured; boxes are reported as evidence
+    3. Full-image OCR (the reading the field extractors use)
+    4. For passports: second MRZ-tuned pass on the bottom of the page
     """
     from app.modules.ocr.preprocessing import preprocess_for_ocr, preprocess_for_mrz
 
@@ -237,22 +202,21 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
         _configure_tesseract()
     preprocessed = preprocess_for_ocr(image, document_type)
 
-    # Step 1: Try document region localization
+    # Step 1: Document region localization (if a trained model is configured).
+    # Its boxes are reported as evidence alongside the full-page reading; they
+    # do not replace it, because the field extractors rely on printed labels and
+    # line structure that per-box crops do not carry.
     region_result = _run_localization(image, document_type)
 
-    # Step 2: Run OCR on regions if available
-    if region_result and region_result.get("regions"):
-        raw_text, words, mean_conf, regions_used = _run_ocr_on_regions(image, region_result)
-        return OCRResult(
-            raw_text=raw_text,
-            words=words,
-            mean_confidence=mean_conf,
-            region_detection=region_result,
-            text_regions_used=regions_used,
-        )
+    # Each detected text box is also read on its own; the scan route merges
+    # those readings into the extracted fields (app/modules/ocr/region_fields.py).
+    region_reads = []
+    if region_result and _TESSERACT_AVAILABLE:
+        from app.modules.ocr.region_fields import read_regions
 
-    # Step 3: Full-image OCR with preprocessing
-    logger.info("Using full-image OCR (localization disabled or failed)")
+        region_reads = read_regions(image, region_result)
+
+    # Step 2: Full-image OCR with preprocessing
 
     if not _TESSERACT_AVAILABLE:
         return OCRResult(
@@ -303,7 +267,7 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
     main_text = "\n".join(" ".join(parts) for parts in lines.values())
     mean_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
-    # Step 4: For passports/visas, a second MRZ-tuned pass when the main pass
+    # Step 3: For passports/visas, a second MRZ-tuned pass when the main pass
     # did not already return both MRZ lines.
     if document_type in ("passport", "visa"):
         import re
@@ -333,4 +297,7 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
         raw_text=main_text,
         words=words,
         mean_confidence=round(mean_conf, 2),
+        region_detection=region_result,
+        text_regions_used=len(region_reads),
+        region_reads=region_reads,
     )

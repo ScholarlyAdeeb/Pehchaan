@@ -67,7 +67,12 @@ async def models():
     settings = get_settings()
     metrics = json.loads(_CLASSIFIER_METRICS.read_text()) if _CLASSIFIER_METRICS.is_file() else None
     loc_path = Path(settings.LOCALIZATION_MODEL_PATH) if settings.LOCALIZATION_MODEL_PATH else None
-    loc_weights = BACKEND_ROOT / "models" / "localization" / "fasterrcnn_document_regions.pth"
+    loc_weights = loc_path or BACKEND_ROOT / "models" / "localization" / "region_detector.pt"
+    loc_metrics_path = BACKEND_ROOT / "training" / "region_detector_metrics.json"
+    loc_metrics = json.loads(loc_metrics_path.read_text()) if loc_metrics_path.is_file() else None
+    ocr_eval_path = BACKEND_ROOT / "training" / "region_ocr_eval.json"
+    ocr_eval = json.loads(ocr_eval_path.read_text()) if ocr_eval_path.is_file() else None
+    from app.modules.records.issued_documents import DB_PATH as issued_db
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -77,7 +82,7 @@ async def models():
                 "name": "Document-type classifier",
                 "kind": "Trained neural network",
                 "architecture": "MobileNetV2 (ImageNet-pretrained, final layer retrained)",
-                "purpose": "Tells Aadhaar, PAN and passport images apart for auto-detection.",
+                "purpose": "Tells Aadhaar, PAN, driving licence and passport images apart for auto-detection.",
                 "status": "active" if _CLASSIFIER_WEIGHTS.is_file() else "missing",
                 "weights": _file_info(_CLASSIFIER_WEIGHTS),
                 "classes": metrics["classes"] if metrics else ["aadhar", "pan", "passport"],
@@ -85,25 +90,55 @@ async def models():
                     "train_images": metrics["train_images"],
                     "validation_images": metrics["validation_images"],
                     "validation_accuracy": metrics["validation_accuracy"],
+                    "validation_accuracy_photo_style": metrics.get("validation_accuracy_photo_style"),
+                    "split": metrics.get("split"),
                     "epochs": metrics["epochs"],
                     "optimizer": metrics["optimizer"],
                     "input_size": metrics["input_size"],
                     "per_class": metrics["per_class"],
                     "confusion_matrix": metrics["confusion_matrix"],
                 },
-                "caveat": "Validation images come from the same synthetic templates as training, so "
-                          "accuracy on real-world photos is not yet measured.",
+                "caveat": "Held-out images are other people's cards from the same generated templates, so "
+                          "accuracy on real-world documents and other layouts is not yet measured.",
             },
             {
                 "key": "region_detector",
                 "name": "Document region detector",
                 "kind": "Trained neural network",
                 "architecture": "Faster R-CNN, ResNet-50 FPN backbone",
-                "purpose": "Would locate photo / MRZ / name regions before OCR.",
+                "purpose": "Locates each field (name, dates, document number, address, photo, MRZ, QR, barcode); "
+                           "every text box is then read on its own and merged into the extracted fields.",
                 "status": "active" if (settings.LOCALIZATION_ENABLED and loc_path and loc_path.is_file()) else "disabled",
                 "weights": _file_info(loc_weights),
-                "caveat": "Trained only on generated documents; left disabled until fine-tuned on "
-                          "annotated real scans. OCR reads the whole image instead.",
+                "training": None if not loc_metrics else {
+                    "split": loc_metrics["split"],
+                    "best_epoch": loc_metrics["best_epoch"],
+                    "held_out_photo_style": {k: loc_metrics["photo_style"][k] for k in ("map50", "map75", "mean_iou")},
+                    "held_out_clean": {k: loc_metrics["clean"][k] for k in ("map50", "map75", "mean_iou")},
+                    "per_class": loc_metrics["photo_style"]["per_class"],
+                },
+                "field_extraction": None if not ocr_eval else {
+                    "held_out_cards": ocr_eval["cards"],
+                    "fields_checked": ocr_eval["fields_checked"],
+                    "accuracy_full_page_only": ocr_eval["page_only"],
+                    "accuracy_with_regions": ocr_eval["with_regions"],
+                    "per_document": ocr_eval["per_document"],
+                },
+                "caveat": "Trained on one generated template per document type. On any other layout its boxes are "
+                          "not reliable, so region readings are used only when the detections pass a layout check; "
+                          "otherwise the full-page reading is used alone.",
+            },
+            {
+                "key": "issued_documents",
+                "name": "Issued-documents database",
+                "kind": "Reference database",
+                "architecture": "Local SQLite; document numbers stored as keyed hashes",
+                "purpose": "Holds the name, date of birth and expiry each document number was issued with; "
+                           "a scanned document that disagrees is flagged as an identity conflict.",
+                "status": "active" if issued_db.is_file() else "missing",
+                "weights": _file_info(issued_db),
+                "caveat": "Built from the generated identity dataset (300 people, 1200 documents). A number that is "
+                          "not in it is reported as 'not found' and does not affect the risk score.",
             },
             {
                 "key": "ocr",

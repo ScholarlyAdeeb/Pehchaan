@@ -47,9 +47,11 @@ from app.modules.classification import auto_detect
 from app.modules.classification.classifier import classifier
 from app.modules.ocr.engine import run_ocr
 from app.modules.ocr.field_extractors import extract_fields
+from app.modules.ocr.region_fields import assess_layout, merge_region_fields
 from app.modules.ocr.mrz_parser import parse_mrz
 from app.modules.provenance import provenance
-from app.modules.records.crosscheck import check_against_records
+from app.modules.records.crosscheck import apply_reference_check, check_against_records
+from app.modules.records.issued_documents import check_issued_document
 from app.modules.records.forgery_registry import find_matches, fingerprint
 from app.modules.records.pii import hash_document_number, mask_document_number
 from app.modules.risk.evaluation import build_evaluation
@@ -256,6 +258,12 @@ async def scan_document(
             warnings=mrz.warnings,
         )
     extracted_fields = extract_fields(document_type, ocr_result.raw_text)
+    # Fields the full-page reading missed (or got in an invalid form) are taken
+    # from the boxes the region detector found.
+    extracted_fields, field_sources = merge_region_fields(document_type, extracted_fields, ocr_result.region_reads)
+    layout_recognised, layout_note = (
+        assess_layout(document_type, ocr_result.region_reads) if ocr_result.region_reads else (False, "")
+    )
     identity = _build_identity(document_type, extracted_fields, mrz_full)
 
     # --- Validation rules ---
@@ -275,10 +283,14 @@ async def scan_document(
 
     # --- Records cross-check against earlier screenings ---
     fp = fingerprint(doc_image, doc_face_crop[0] if doc_face_crop else None)
-    records, registry_matches = await asyncio.gather(
+    records, registry_matches, reference = await asyncio.gather(
         loop.run_in_executor(_pool, partial(check_against_records, identity.document_number, identity.name, identity.date_of_birth)),
         loop.run_in_executor(_pool, find_matches, fp),
+        loop.run_in_executor(_pool, partial(
+            check_issued_document, document_type, identity.document_number, identity.name,
+            identity.date_of_birth, identity.expiry_date)),
     )
+    records = apply_reference_check(records, reference)
     if registry_matches:
         m = registry_matches[0]
         validation.issues.append(ValidationIssue(
@@ -355,6 +367,15 @@ async def scan_document(
             extracted_fields=extracted_fields,
             region_detection=ocr_result.region_detection,  # type: ignore[arg-type]
             text_regions_used=ocr_result.text_regions_used,
+            field_sources=field_sources,
+            layout_recognised=layout_recognised,
+            layout_note=layout_note,
+            # the number box is reported masked: the stored record must never hold the full number
+            region_reads=[
+                {**r.to_dict(), "text": identity.document_number_masked or "(masked)"}
+                if r.class_name == "document_number" else r.to_dict()
+                for r in ocr_result.region_reads
+            ],
         ),
         mrz=mrz_summary,
         validation=ValidationSummary(

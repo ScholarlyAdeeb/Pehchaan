@@ -54,6 +54,11 @@ class RecordCheckResult:
     issues: list[RecordIssue] = field(default_factory=list)
     risk: int | None = None  # None = not applicable to the risk score
     summary: str = ""
+    # comparison with the issued-documents database (issued_documents.ReferenceCheck as a dict)
+    reference: dict | None = None
+    # the earlier-screenings outcome on its own, before the reference check was folded in
+    history_status: str = ""
+    history_summary: str = ""
 
 
 def normalize_doc_number(value: str | None) -> str:
@@ -112,6 +117,39 @@ def _fetch_from_memory(doc_number: str) -> list[PriorRecord]:
             verdict=(rec.get("risk") or {}).get("verdict"), checkpoint=None, when=rec.get("timestamp"),
         ))
     return out
+
+
+def apply_reference_check(result: RecordCheckResult, reference) -> RecordCheckResult:
+    """Fold the issued-documents comparison into the records result.
+
+    A mismatch with the issuing records is an identity conflict in its own
+    right (risk 100). A match is positive evidence, so a document with no
+    screening history still gets a records signal of 0 instead of none.
+    A number that is simply not in the database changes nothing: the
+    database only covers the documents it was built from.
+    """
+    from dataclasses import asdict
+
+    result.reference = asdict(reference)
+    result.history_status, result.history_summary = result.status, result.summary
+    if reference.status == "mismatch":
+        shown = "; ".join(
+            f"{f.field.replace('_', ' ')}: document '{f.on_document}', issuing records '{f.in_database}'"
+            for f in reference.fields if not f.match)
+        result.issues.insert(0, RecordIssue(
+            "ISSUING_RECORD_MISMATCH",
+            f"{reference.summary} ({shown})",
+            "critical",
+        ))
+        result.status, result.risk = "conflict", 100
+        result.summary = reference.summary
+    elif reference.status == "match":
+        if result.risk is None:
+            result.status, result.risk = "consistent", 0
+            result.summary = reference.summary
+        else:
+            result.summary = f"{result.summary} {reference.summary}"
+    return result
 
 
 def check_against_records(
