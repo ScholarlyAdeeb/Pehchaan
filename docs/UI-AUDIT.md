@@ -1,6 +1,6 @@
 # PEHCHAAN UI audit
 
-Date: 26 Sep 2026 · Method: heuristic review (priority rules §1–§10 and a pre-delivery checklist) applied to `frontend/src` (React 19 + Tailwind 4). Numbers below were measured from the code; contrast ratios are computed with the WCAG 2.2 formula.
+Date: 26 Sep 2026 · Method: heuristic review (priority rules §1–§10 and a pre-delivery checklist) applied to `Pehchaan/src` (React 19 + Tailwind 4). Numbers below were measured from the code; contrast ratios are computed with the WCAG 2.2 formula.
 
 Severity: **Critical** = blocks some users or breaks trust · **High** = visible inconsistency on most screens · **Medium** = polish · **Low** = nice to have.
 

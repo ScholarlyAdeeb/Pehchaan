@@ -235,7 +235,7 @@ the `auditledger` chaincode on a Fabric 2.5 channel (`fabric/`):
   the gateway's signature. It accepts a batch id once; a second write with any
   content is rejected by the chaincode.
 - No personal data goes on chain.
-- The gateway (`frontend/server/fabric.ts`, official `@hyperledger/fabric-gateway`
+- The gateway (`Pehchaan/server/fabric.ts`, official `@hyperledger/fabric-gateway`
   client) waits for the transaction to be committed in a block and stores the
   transaction id with the batch. Batches sealed before Fabric was configured,
   or while the peer was unreachable, are anchored by the next maintenance run.
@@ -267,8 +267,8 @@ its content and timestamp. Verification reports each entry as valid, legacy
 The engine and gateway run on the checkpoint machine, so screening itself
 needs no network; only the write to the cloud database can fail.
 
-`frontend/server/outbox.ts`: when that write fails, the scan, its signed
-audit entry and its system log are saved as files in `frontend/data/outbox/`.
+`Pehchaan/server/outbox.ts`: when that write fails, the scan, its signed
+audit entry and its system log are saved as files in `Pehchaan/data/outbox/`.
 They survive a restart. Every 30 seconds (`OUTBOX_SYNC_SECONDS`) the gateway
 checks the database and replays the queue in its original order; a scan joins
 the hash chain at that point. A record the database rejects is moved to
@@ -278,7 +278,7 @@ by connection timeouts. Queued scans are listed with a "queued" status, and
 the admin bar shows the count.
 
 Signing in offline: each successful online sign-in stores the account on the
-checkpoint machine (`frontend/server/offline-auth.ts`): the same bcrypt hash
+checkpoint machine (`Pehchaan/server/offline-auth.ts`): the same bcrypt hash
 the database holds, the role and the checkpoints, sealed with an HMAC. When
 the database cannot be reached, the password is checked against that copy and
 the session is marked "Offline sign-in". An edited file is rejected whole; an
@@ -345,9 +345,9 @@ separately with `bash fabric/network.sh up` (needs Docker).
 | Check | Command | Result |
 |---|---|---|
 | Engine tests | `backend`: `python -m pytest -q` | 111 pass |
-| Gateway checks | `frontend`: `npm test` | 7 queue checks, offline path check, 12 session and offline sign-in checks |
-| Engine link | `frontend`: `npx tsx server/tls.check.ts` (engine running) | mutual TLS verified |
-| Fabric | `bash fabric/network.sh up`, then `frontend`: `npx tsx server/fabric.check.ts` | anchor committed; rewrite rejected |
+| Gateway checks | `Pehchaan`: `npm test` | 7 queue checks, offline path check, 12 session and offline sign-in checks |
+| Engine link | `Pehchaan`: `npx tsx server/tls.check.ts` (engine running) | mutual TLS verified |
+| Fabric | `bash fabric/network.sh up`, then `Pehchaan`: `npx tsx server/fabric.check.ts` | anchor committed; rewrite rejected |
 | Field extraction | `backend`: `python training/eval_region_ocr.py` | table in 4.2 |
 | Demo images | `backend`: `python scripts/make_demo_samples.py` | genuine CLEAR; tampered and clone HIGH RISK |
 

@@ -24,11 +24,11 @@ Docs: [problem statement](docs/PROBLEM_STATEMENT.md) · [architecture and measur
 | Path | What it is |
 |---|---|
 | [`backend/`](backend) | Screening engine (Python, FastAPI): OCR, field detection, validation rules, forensics, face match, risk score |
-| [`frontend/`](frontend) | Dashboard and API gateway (React, Express): sign-in, roles, storage, audit ledger |
+| [`Pehchaan/`](Pehchaan) | Dashboard and API gateway (React, Express): sign-in, roles, storage, audit ledger |
 | [`fabric/`](fabric) | Hyperledger Fabric network and chaincode that anchor sealed audit batches |
 | [`docs/`](docs) | Architecture, API, deployment, slides |
 | [`sample-data/`](sample-data) | Demo images (generated locally, not committed) |
-| `frontend/vercel.json`, `frontend/api/` | Vercel build, routing and cron configuration, and the function entry |
+| `Pehchaan/vercel.json`, `Pehchaan/api/` | Vercel build, routing and cron configuration, and the function entry |
 | `start_all.bat` | One-step local launcher (Windows) |
 
 ---
@@ -48,7 +48,7 @@ generated dataset is present, and opens two windows:
 
 | Service | URL | What it is |
 |---|---|---|
-| Web app + API gateway | http://localhost:3000 | React UI, login/roles, Neon storage, hash chain (Express, `frontend/server.ts`) |
+| Web app + API gateway | http://localhost:3000 | React UI, login/roles, Neon storage, hash chain (Express, `Pehchaan/server.ts`) |
 | Screening engine | https://127.0.0.1:8000 | FastAPI — all AI/OCR/forensics (`backend/app`). Mutual TLS: only the gateway can call it |
 
 Manual start (two terminals):
@@ -61,21 +61,21 @@ pip install -r requirements.txt
 python -m scripts.make_tls_certs      # once: certificates for the gateway-engine link
 python run_engine.py                  # HTTPS + client certificate when backend/certs exists
 
-# frontend
-cd frontend
+# dashboard and gateway
+cd Pehchaan
 npm install
 npm run dev
 ```
 
-Configuration: copy `backend/.env.example` → `backend/.env` and `frontend/.env.example` →
-`frontend/.env`. Put the same Neon connection string in both (the engine reads earlier
+Configuration: copy `backend/.env.example` → `backend/.env` and `Pehchaan/.env.example` →
+`Pehchaan/.env`. Put the same Neon connection string in both (the engine reads earlier
 screenings for the records cross-check). Set `TESSERACT_CMD` if Tesseract is not on PATH.
 
 Optional Hyperledger Fabric ledger (needs Docker): `bash fabric/network.sh up`.
 
 Architecture and measured results: [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md).
 Hosting the dashboard and gateway on Vercel: [`docs/DEPLOYMENT_VERCEL.md`](docs/DEPLOYMENT_VERCEL.md).
-Import the repository and pick the `frontend` directory (Root Directory = `frontend`); `vercel.json` there holds the
+Import the repository and pick the `Pehchaan` directory (Root Directory = `Pehchaan`); `vercel.json` there holds the
 build settings. The engine and the Fabric network run on your own machine or VM.
 
 **First login:** on an empty database the sign-in page offers *Create Admin Account*, which
@@ -100,7 +100,7 @@ writes three passports to `sample-data/` built from the dataset with a correct I
 
 ```bash
 cd backend && .venv\Scripts\python -m pytest -q      # 111 tests
-cd frontend && npm run lint && npm test && npm run build
+cd Pehchaan && npm run lint && npm test && npm run build
 ```
 
 ---
@@ -198,7 +198,7 @@ backend/                     FastAPI screening engine
   scripts/                   cardgen/ (dataset generator), make_demo_samples.py, make_tls_certs.py, …
   run_engine.py              starts the engine (mutual TLS when backend/certs exists)
   tests/
-frontend/
+Pehchaan/
   server.ts                  Express: auth, roles, /api/screenings → engine → Neon
   server/                    neon.ts (storage, hash chain), session.ts, outbox.ts, fabric.ts, trust.ts, …
   src/components/            NewScanView, ScreeningReportView, OverviewView, SystemHealthDocsView, …

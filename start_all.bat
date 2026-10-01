@@ -11,7 +11,7 @@ echo.
 
 REM Get the directory where this script is located
 set "ROOT_DIR=%~dp0"
-set "FRONTEND_DIR=%ROOT_DIR%frontend"
+set "FRONTEND_DIR=%ROOT_DIR%Pehchaan"
 set "BACKEND_DIR=%ROOT_DIR%backend"
 
 REM ---- Preflight checks ----

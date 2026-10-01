@@ -31,7 +31,7 @@ Genesis Block → Block #1 → Block #2 → ... → Block #N
 | **Verification** | `verifyChainIntegrity()` — recomputes every hash from genesis; detects any tampering |
 | **Forgery Registry** | Merkle tree batch anchoring (`pehchaan_anchor_batches` table) with external proof support |
 
-**Code Reference:** `frontend/server/hashchain.ts:12-37`, `frontend/server/neon.ts:888-955`
+**Code Reference:** `Pehchaan/server/hashchain.ts:12-37`, `Pehchaan/server/neon.ts:888-955`
 
 ---
 
@@ -46,7 +46,7 @@ Genesis Block → Block #1 → Block #2 → ... → Block #N
 | **Coverage** | Every scan, officer decision, login, config change, system event |
 | **Query** | Full history per document (`fetchAuditLogsForTarget`) |
 
-**Code Reference:** `frontend/server/hashchain.ts:44-85`, `frontend/server/neon.ts:846-886`
+**Code Reference:** `Pehchaan/server/hashchain.ts:44-85`, `Pehchaan/server/neon.ts:846-886`
 
 ---
 

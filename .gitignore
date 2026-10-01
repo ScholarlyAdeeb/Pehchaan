@@ -139,7 +139,7 @@ backend/scripts/cardgen/preview/
 
 # Gateway store-and-forward outbox: scans queued while the database was
 # unreachable. Holds personal data and belongs to one machine only.
-frontend/data/
+Pehchaan/data/
 
 # Local issued-documents database (built per machine with its own PII_HASH_KEY)
 # and scratch output of the trainers.
@@ -156,7 +156,7 @@ fabric/chaincode/*/vendor/
 .vercel/
 
 # Bundled gateway for the Vercel function (built by `npm run build`).
-frontend/dist-server/
+Pehchaan/dist-server/
 .npm-cache/
 
 # TLS material for the gateway-engine link (backend/scripts/make_tls_certs.py).
@@ -164,7 +164,7 @@ backend/certs/
 .pip-cache/
 
 # Generated marketing-video output (its media is never committed).
-frontend/brag-output/
+Pehchaan/brag-output/
 
 # Reference and demo ID documents: kept on disk, never committed.
 # sample-data/README.md is tracked; everything else below it stays local.

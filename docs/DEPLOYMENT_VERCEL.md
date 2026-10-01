@@ -57,8 +57,8 @@ and the PostgreSQL chain work as before.
 
 ## 3. Vercel project
 
-- Root directory: `frontend`. Vercel's import screen lists it as a deployable
-  directory; pick that one and do not import `backend`. `frontend/vercel.json`
+- Root directory: `Pehchaan`. Vercel's import screen lists it as a deployable
+  directory; pick that one and do not import `backend`. `Pehchaan/vercel.json`
   sets the install command, build command and output directory, so no build
   settings need to be entered in the Vercel dashboard.
 - Build: `npm run build` produces `dist/` (dashboard) and

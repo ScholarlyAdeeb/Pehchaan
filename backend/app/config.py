@@ -71,7 +71,7 @@ class Settings:
     RECORDS_NAME_MATCH_THRESHOLD: float = float(os.getenv("RECORDS_NAME_MATCH_THRESHOLD", "0.75"))
 
     # --- Security ---
-    # Shared with the web server (frontend/.env); every /api call must carry it.
+    # Shared with the web server (Pehchaan/.env); every /api call must carry it.
     ENGINE_API_KEY: str | None = os.getenv("ENGINE_API_KEY")
     # Auto-generated if not provided; used for JWT/session tokens and audit signatures.
     AUTH_SECRET_KEY: str = os.getenv("AUTH_SECRET_KEY") or secrets.token_urlsafe(32)
