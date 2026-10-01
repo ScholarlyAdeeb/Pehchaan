@@ -424,9 +424,18 @@ const ClassificationPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
 const FieldsPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
   const entries = Object.entries(a.ocr.extracted_fields).filter(([, v]) => v !== null && v !== undefined && v !== '');
   const show = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Valid' : 'Invalid') : Array.isArray(v) ? v.join(', ') : String(v));
+  const sources = a.ocr.field_sources || {};
+  const boxesRead = a.ocr.text_regions_used || 0;
   return (
     <div className="space-y-3 text-xs">
       {!a.ocr.engine_available && <p className="text-[#93000a]">{a.ocr.warning}</p>}
+      {boxesRead > 0 && (
+        <p className={a.ocr.layout_recognised ? 'text-[#006a26]' : 'text-[#8a5600]'}>
+          {a.ocr.layout_recognised
+            ? `Field detector located and read ${boxesRead} field boxes (${a.ocr.layout_note}).`
+            : `Field detector not used: ${a.ocr.layout_note}. Values below come from the full-page reading.`}
+        </p>
+      )}
       <dl className="grid grid-cols-2 gap-3">
         <KV k="Name" v={a.identity.name} />
         <KV k="Document number" v={a.identity.document_number} mono />
@@ -441,7 +450,17 @@ const FieldsPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
             {entries.map(([k, v]) => (
               <tr key={k} className="border-t border-[#f4f3f8]">
                 <td className="py-1 pr-3 text-[#717785] whitespace-nowrap align-top">{FIELD_LABELS[k] || k}</td>
-                <td className="py-1 text-[#1a1b1f] break-words">{show(v)}</td>
+                <td className="py-1 text-[#1a1b1f] break-words">
+                  {show(v)}
+                  {sources[k] && (
+                    <span
+                      className="ml-2 px-1.5 py-0.5 rounded bg-[#eef3fb] text-[#0059b5] text-[10px] font-semibold whitespace-nowrap"
+                      title={sources[k] === 'region' ? 'Read from the box the field detector located' : 'Full-page reading and located box agree'}
+                    >
+                      {sources[k] === 'region' ? 'located field' : 'confirmed'}
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -603,6 +622,35 @@ const RecordsPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
     <div className="space-y-3 text-xs">
       <p className={`font-semibold ${statusTone[r.status] || 'text-[#414753]'}`}>{r.summary}</p>
       {r.document_number && <p className="text-[#717785]">Looked up document number <span className="font-mono">{r.document_number}</span></p>}
+      {r.reference && r.reference.status !== 'not_checked' && (
+        <div className="border border-[#efedf3] rounded p-2.5 space-y-2">
+          <p className="font-semibold text-[#1a1b1f]">Issuing records</p>
+          <p className={r.reference.status === 'mismatch' ? 'text-[#ba1a1a]' : r.reference.status === 'match' ? 'text-[#006a26]' : 'text-[#717785]'}>
+            {r.reference.summary}
+          </p>
+          {r.reference.fields.length > 0 && (
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-[#717785] border-b border-[#efedf3]">
+                  <th className="py-1 pr-2">Field</th><th className="py-1 px-2">On this document</th><th className="py-1 px-2">As issued</th><th className="py-1 pl-2">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.reference.fields.map((f) => (
+                  <tr key={f.field} className="border-b border-[#f4f3f8]">
+                    <td className="py-1 pr-2">{f.field.replace(/_/g, ' ')}</td>
+                    <td className="py-1 px-2 font-mono break-words">{f.on_document || 'not read'}</td>
+                    <td className="py-1 px-2 font-mono break-words">{f.in_database || '—'}</td>
+                    <td className={`py-1 pl-2 font-semibold ${f.match ? 'text-[#006a26]' : 'text-[#ba1a1a]'}`}>
+                      {!f.on_document ? 'not compared' : f.match ? 'Same' : 'Different'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       <IssueList issues={r.issues.filter((i) => i.severity !== 'info')} empty="No conflicts with earlier records." />
       {r.prior_records.length > 0 && (
         <div className="overflow-x-auto">

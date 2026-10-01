@@ -31,20 +31,37 @@ const STAGES = [
 ];
 
 const MAX_SIDE = 3000;
+// Serverless hosts cap a request body (Vercel: 4.5 MB). The document and the
+// live photo travel together as base64, so each gets a share of that budget.
+const DOC_BUDGET_CHARS = 2_900_000;
+const LIVE_BUDGET_CHARS = 1_200_000;
+
+// Re-encodes only as much as needed: recompression weakens the forensic signal.
+function fitToBudget(source: CanvasImageSource, width: number, height: number, budget: number): string {
+  let scale = 1;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.92, 0.85, 0.78]) {
+      const url = canvas.toDataURL('image/jpeg', quality);
+      if (url.length <= budget || (attempt === 7 && quality === 0.78)) return url;
+    }
+    scale *= 0.85;
+  }
+  return '';
+}
 
 // Phone photos can be 12+ MP; cap the longest side so uploads stay small
 // while keeping MRZ text large enough for OCR.
-function prepareImage(dataUrl: string): Promise<string> {
+function prepareImage(dataUrl: string, budget = DOC_BUDGET_CHARS): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
-      if (scale === 1 && dataUrl.startsWith('data:image/jpeg')) return resolve(dataUrl);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.92));
+      if (scale === 1 && dataUrl.startsWith('data:image/jpeg') && dataUrl.length <= budget) return resolve(dataUrl);
+      resolve(fitToBudget(img, Math.round(img.width * scale), Math.round(img.height * scale), budget));
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
@@ -118,11 +135,7 @@ export const NewScanView: React.FC<NewScanViewProps> = ({ onNavigate, onAddRecor
   const capturePhoto = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')!.drawImage(video, 0, 0);
-    const url = canvas.toDataURL('image/jpeg', 0.92);
+    const url = fitToBudget(video, video.videoWidth, video.videoHeight, cameraFor === 'doc' ? DOC_BUDGET_CHARS : LIVE_BUDGET_CHARS);
     if (cameraFor === 'doc') setDocImage(url);
     else setLiveImage(url);
     resetResult();
@@ -152,7 +165,7 @@ export const NewScanView: React.FC<NewScanViewProps> = ({ onNavigate, onAddRecor
     setElapsed(0);
     resetResult();
     try {
-      const [doc, live] = await Promise.all([prepareImage(docImage), liveImage ? prepareImage(liveImage) : null]);
+      const [doc, live] = await Promise.all([prepareImage(docImage), liveImage ? prepareImage(liveImage, LIVE_BUDGET_CHARS) : null]);
       const record = await runScreening(
         { documentType: selectedDoc, documentImage: doc, liveImage: live, checkpointId: checkpoint.id },
         token,
