@@ -1,6 +1,7 @@
 import type { DbScanRecord } from './neon.ts';
+import { engineBaseUrl, engineRequest, type EngineResponse } from './engine-transport.ts';
 
-export const PYTHON_API_URL = (process.env.PYTHON_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+export const PYTHON_API_URL = engineBaseUrl();
 
 const ENGINE_TYPES: Record<string, string> = {
   auto: 'auto',
@@ -81,14 +82,9 @@ export async function runEngineScan(documentType: string, documentImage: string,
   form.append('document', dataUrlToBlob(documentImage, 'documentImage'), 'document.jpg');
   if (liveImage) form.append('live_face', dataUrlToBlob(liveImage, 'liveImage'), 'live.jpg');
 
-  let res: Response;
+  let res: EngineResponse;
   try {
-    res = await fetch(`${PYTHON_API_URL}/api/documents/scan`, {
-      method: 'POST',
-      headers: engineHeaders(),
-      body: form,
-      signal: AbortSignal.timeout(120_000),
-    });
+    res = await engineRequest('/api/documents/scan', { method: 'POST', headers: engineHeaders(), form, timeoutMs: 120_000 });
   } catch (err: any) {
     throw new EngineError(
       `Screening engine is not reachable at ${PYTHON_API_URL}. Start the Python backend (start_all.bat). (${err?.message || err})`,
@@ -96,7 +92,7 @@ export async function runEngineScan(documentType: string, documentImage: string,
     );
   }
   if (!res.ok) {
-    const text = await res.text();
+    const text = res.text();
     let detail = text;
     try { detail = JSON.parse(text).detail || text; } catch { /* plain text */ }
     throw new EngineError(`Screening engine rejected the scan: ${detail}`, res.status === 400 ? 400 : 502);
@@ -105,7 +101,7 @@ export async function runEngineScan(documentType: string, documentImage: string,
 }
 
 export async function fetchEngine(path: string) {
-  const res = await fetch(`${PYTHON_API_URL}${path}`, { headers: engineHeaders(), signal: AbortSignal.timeout(15_000) });
+  const res = await engineRequest(path, { headers: engineHeaders(), timeoutMs: 15_000 });
   if (!res.ok) throw new EngineError(`Engine returned ${res.status}`);
   return res.json();
 }

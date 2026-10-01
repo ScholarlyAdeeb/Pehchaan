@@ -22,6 +22,7 @@ pytesseract==0.3.13
 # --- Records database (cross-check against earlier screenings) ---
 psycopg[binary]==3.2.3
 python-dotenv>=1.0
+cryptography>=43            # scripts/make_tls_certs.py (gateway-engine mutual TLS)
 
 # --- Document classification (PyTorch) ---
 torch>=2.0.0
