@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Pehchaan/public/logo.png" alt="Pehchaan — Identity Verification System" width="220">
+</p>
+
 # PEHCHAAN — AI-Based Fake Identity & Document Screening
 
 **Smart India Hackathon 2026 · Problem Statement 26188** · Ministry of Home Affairs ·

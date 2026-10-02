@@ -73,10 +73,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
     <div className="min-h-screen bg-[#0c1017] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <img src="/icon.svg" alt="PEHCHAAN" className="w-10 h-10 object-contain" />
-            <h1 className="text-2xl font-bold text-white tracking-tight">{t('app.name')}</h1>
-          </div>
+          <img src="/logo.png" alt="PEHCHAAN — Identity Verification System" className="w-44 sm:w-52 mx-auto mb-3 rounded-xl" />
+          <h1 className="sr-only">{t('app.name')}</h1>
           <p className="text-sm text-[#8a94a6]">{t('login.subtitle')}</p>
           <p className="text-[11px] text-[#2563eb] font-semibold mt-2 tracking-wide uppercase">Sign in to begin screening</p>
           <p className="text-xs text-[#7a889c] mt-1">SIH 2026 — Problem Statement 26188</p>
