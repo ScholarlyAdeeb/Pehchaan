@@ -1,12 +1,12 @@
 // PEHCHAAN Border Outpost Service Worker
 // Supports offline resilience and local store-and-forward operations
-const CACHE_NAME = 'pehchaan-cache-v3';
+const CACHE_NAME = 'pehchaan-cache-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/logo-mark.png',
-  '/logo.png',
+  '/logo-mark.svg',
+  '/logo.svg',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/apple-touch-icon.png'

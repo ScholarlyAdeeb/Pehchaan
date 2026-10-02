@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Pehchaan/public/logo.png" alt="Pehchaan — Identity Verification System" width="220">
+  <img src="docs/logo.svg" alt="PEHCHAAN — Identity Verification System" width="440">
 </p>
 
 # PEHCHAAN — AI-Based Fake Identity & Document Screening
@@ -22,6 +22,20 @@ batch and anchored on a Hyperledger Fabric ledger.
 | API | [docs/API.md](docs/API.md) |
 | Deployment | [docs/DEPLOYMENT_VERCEL.md](docs/DEPLOYMENT_VERCEL.md) |
 | Problem statement | [docs/PROBLEM_STATEMENT.md](docs/PROBLEM_STATEMENT.md) |
+
+## Demo sign-in
+
+Open https://tumharipehchaan.vercel.app (or the Android app) and sign in with one of these
+accounts. Each role sees a different workspace.
+
+| Role | Official ID / Email | Password | What you can do |
+|---|---|---|---|
+| Officer | `officer@pehchaan.gov.in` | `officer123` | Screen documents, see your own screenings and reports |
+| Post In-Charge | `incharge@pehchaan.gov.in` | `incharge123` | Supervise assigned checkpoints, review officers' activity, co-sign overrides |
+| Administrator | `admin@pehchaan.gov.in` | `ABC@12345678` | Everything: analytics, audit trail, system logs, security and trust, users and checkpoints |
+
+These are shared demonstration accounts on demonstration data. Please do not change their
+passwords or deactivate users, so the next person can sign in too.
 
 ![Screening report for a tampered passport: HIGH RISK 66, with the evaluation matrix and the risk calculation](docs/screenshots/04-report-verdict.png)
 
@@ -205,6 +219,10 @@ done.
 ---
 
 ## Screens
+
+The sign-in page opens with a short entrance: the shield, the name, a pass over the
+supported document types, then the form. It is motion only, never blocks typing, and is
+skipped when the device asks for reduced motion.
 
 | Sign in | Overview |
 |---|---|

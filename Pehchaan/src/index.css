@@ -153,3 +153,83 @@
     @apply inline-flex items-center gap-1.5 text-xs font-semibold text-[#414753] bg-[#f4f3f8] hover:bg-[#efedf3] px-3 py-2 rounded-md transition-colors cursor-pointer;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Sign-in entrance. Runs once when the sign-in page mounts: shield, then the
+   name, then a short pass over the supported document types, then the form.
+   Opacity and transform only; nothing here blocks input, and the form is in
+   the page from the first frame.
+   ------------------------------------------------------------------------ */
+@keyframes login-boot-logo {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes login-boot-rise {
+  from { opacity: 0; transform: translateY(var(--login-rise, 4px)); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes login-boot-sweep {
+  from { transform: translateX(-130%) skewX(-18deg); }
+  to   { transform: translateX(230%) skewX(-18deg); }
+}
+@keyframes login-boot-doc {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.985); }
+  35%  { opacity: 1; transform: none; }
+  65%  { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-4px) scale(0.99); }
+}
+
+.login-boot-logo {
+  animation: login-boot-logo 500ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+/* One pass of light, confined to the shield's own shapes. */
+.login-boot-sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: url('/logo-mark.svg') center / contain no-repeat;
+  mask: url('/logo-mark.svg') center / contain no-repeat;
+}
+.login-boot-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(147, 197, 253, 0.55), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+  animation: login-boot-sweep 650ms ease-out 380ms both;
+}
+.login-boot-rise {
+  animation: login-boot-rise 350ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--login-delay, 0ms);
+}
+.login-boot-docs {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 11rem;
+  pointer-events: none;
+}
+.login-boot-doc {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  opacity: 0;
+  animation: login-boot-doc 320ms ease-out both;
+  animation-delay: var(--login-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-boot-logo,
+  .login-boot-rise,
+  .login-boot-sweep::after {
+    animation: none;
+  }
+  .login-boot-docs {
+    display: none;
+  }
+}

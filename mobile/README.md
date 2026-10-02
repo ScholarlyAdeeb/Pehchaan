@@ -36,7 +36,5 @@ Edit `server.url` in `capacitor.config.json` and the address in
 
 ## Change the icon
 
-The launcher icons and splash screens in `android/app/src/main/res` are the
-team's original artwork. `npm run icons` regenerates them from
-`assets/logo.png` (1024 x 1024) and overwrites that artwork, so run it only
-with a new source image.
+Replace `assets/logo.png` (1024 x 1024, the shield on the brand navy) and run
+`npm run icons`. The logo itself is drawn as SVG in `Pehchaan/public/`.

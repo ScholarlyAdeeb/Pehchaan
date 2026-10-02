@@ -6,6 +6,43 @@ interface LoginViewProps {
   onNavigatePage?: (page: 'privacy' | 'terms') => void;
 }
 
+// Entrance timing (ms). The sequence is presentational only: the form is
+// mounted and usable from the first frame, and nothing waits for it.
+const DOCS_START = 650;
+const DOC_STEP = 165;
+const FORM_START = 1700;
+const FORM_STEP = 45;
+
+const BOOT_DOCUMENTS = ['Aadhaar', 'PAN', 'Passport', 'Visa', 'Driving licence', 'National ID'] as const;
+
+const delay = (ms: number, rise = 4) => ({ '--login-delay': `${ms}ms`, '--login-rise': `${rise}px` }) as React.CSSProperties;
+
+/** A plain outline of a document type; no data, only its general shape. */
+const DocumentOutline: React.FC<{ kind: (typeof BOOT_DOCUMENTS)[number] }> = ({ kind }) => {
+  const line = (x: number, y: number, w: number) => <path d={`M${x} ${y}h${w}`} />;
+  const common = { fill: 'none', stroke: '#5b6b85', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (kind === 'Passport') {
+    return (
+      <svg width="46" height="62" viewBox="0 0 46 62" {...common} aria-hidden="true">
+        <rect x="1" y="1" width="44" height="60" rx="5" />
+        <circle cx="23" cy="24" r="9" />
+        <path d="M14 24h18M23 15c-4 5-4 13 0 18M23 15c4 5 4 13 0 18" />
+        {line(13, 44, 20)}{line(16, 50, 14)}
+      </svg>
+    );
+  }
+  return (
+    <svg width="84" height="54" viewBox="0 0 84 54" {...common} aria-hidden="true">
+      <rect x="1" y="1" width="82" height="52" rx="6" />
+      {kind === 'Aadhaar' && <><rect x="9" y="12" width="18" height="22" rx="2" />{line(35, 15, 34)}{line(35, 23, 26)}{line(35, 31, 30)}{line(9, 43, 66)}</>}
+      {kind === 'PAN' && <>{line(9, 13, 30)}<rect x="9" y="21" width="16" height="18" rx="2" />{line(33, 24, 24)}{line(33, 32, 18)}<rect x="62" y="21" width="13" height="13" rx="1.5" />{line(9, 46, 40)}</>}
+      {kind === 'Visa' && <>{line(9, 13, 38)}{line(9, 22, 28)}{line(9, 30, 34)}<circle cx="64" cy="22" r="10" /><path d="M58 22l4 4 8-8" />{line(9, 43, 66)}</>}
+      {kind === 'Driving licence' && <><rect x="57" y="11" width="18" height="23" rx="2" />{line(9, 14, 36)}{line(9, 22, 28)}{line(9, 30, 32)}<rect x="9" y="38" width="12" height="8" rx="1.5" />{line(27, 43, 30)}</>}
+      {kind === 'National ID' && <><circle cx="19" cy="22" r="7" /><path d="M9 39c2-6 18-6 20 0" />{line(38, 16, 34)}{line(38, 24, 26)}{line(38, 32, 30)}{line(38, 40, 20)}</>}
+    </svg>
+  );
+};
+
 export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
   const { login } = useAuth();
   const { t, lang, setLang } = useI18n();
@@ -73,15 +110,33 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
     <div className="min-h-screen bg-[#0c1017] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="PEHCHAAN — Identity Verification System" className="w-44 sm:w-52 mx-auto mb-3 rounded-xl" />
+          <div className="login-boot-logo relative w-24 sm:w-28 mx-auto mb-4">
+            <img src="/logo-mark.svg" alt="" className="w-full h-auto block" />
+            <span className="login-boot-sweep" aria-hidden="true" />
+          </div>
+          <img
+            src="/logo-wordmark.svg"
+            alt="PEHCHAAN — Identity Verification System"
+            className="login-boot-rise w-64 sm:w-72 mx-auto mb-4"
+            style={delay(420)}
+          />
           <h1 className="sr-only">{t('app.name')}</h1>
-          <p className="text-sm text-[#8a94a6]">{t('login.subtitle')}</p>
-          <p className="text-[11px] text-[#2563eb] font-semibold mt-2 tracking-wide uppercase">Sign in to begin screening</p>
-          <p className="text-xs text-[#7a889c] mt-1">SIH 2026 — Problem Statement 26188</p>
+          <p className="login-boot-rise text-sm text-[#8a94a6]" style={delay(480)}>{t('login.subtitle')}</p>
+          <p className="login-boot-rise text-[11px] text-[#2563eb] font-semibold mt-2 tracking-wide uppercase" style={delay(540)}>Sign in to begin screening</p>
+          <p className="login-boot-rise text-xs text-[#7a889c] mt-1" style={delay(600)}>SIH 2026 — Problem Statement 26188</p>
         </div>
 
-        <div className="bg-[#141b28] border border-[#1b2230] rounded-2xl p-6 sm:p-8 shadow-xl">
-          <h2 className="text-lg font-bold text-white mb-6">{t('login.title')}</h2>
+        <div className="relative">
+        <div className="login-boot-docs" aria-hidden="true">
+          {BOOT_DOCUMENTS.map((kind, i) => (
+            <div key={kind} className="login-boot-doc" style={delay(DOCS_START + i * DOC_STEP)}>
+              <DocumentOutline kind={kind} />
+              <span className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#7a889c]">{kind}</span>
+            </div>
+          ))}
+        </div>
+        <div className="login-boot-rise bg-[#141b28] border border-[#1b2230] rounded-2xl p-6 sm:p-8 shadow-xl" style={delay(FORM_START, 8)}>
+          <h2 className="login-boot-rise text-lg font-bold text-white mb-6" style={delay(FORM_START + FORM_STEP, 6)}>{t('login.title')}</h2>
 
           {error && (
             <div className="mb-4 p-3 bg-[#3b1111] border border-[#7f1d1d] rounded-lg text-xs text-[#fca5a5]">
@@ -96,7 +151,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 2, 6)}>
               <label className="text-xs font-semibold text-[#94a3b8]">{t('login.email')}</label>
               <input
                 type="text"
@@ -109,7 +164,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 3, 6)}>
               <label className="text-xs font-semibold text-[#94a3b8]">{t('login.password')}</label>
               <input
                 type="password"
@@ -121,7 +176,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 4, 6)}>
               <label className="text-xs font-semibold text-[#94a3b8]">{t('login.language')}</label>
               <select
                 value={lang}
@@ -137,7 +192,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#2563eb] hover:bg-[#1d4ed8] disabled:opacity-50 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              style={delay(FORM_START + FORM_STEP * 5, 6)}
+              className="login-boot-rise w-full bg-[#2563eb] hover:bg-[#1d4ed8] disabled:opacity-50 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">login</span>
               <span>{isLoading ? t('login.signing_in') : t('login.submit')}</span>
@@ -185,8 +241,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
             </div>
           )}
         </div>
+        </div>
 
-        <div className="text-center mt-6 space-y-1">
+        <div className="login-boot-rise text-center mt-6 space-y-1" style={delay(FORM_START + FORM_STEP * 6)}>
           <p className="text-[10px] text-[#6b7a8e]">
             Ministry of Home Affairs (MHA) — Sashastra Seema Bal (SSB)
           </p>

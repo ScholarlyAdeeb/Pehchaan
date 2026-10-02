@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2.5 text-left focus:outline-hidden group cursor-pointer"
           >
             <img
-              src="/logo-mark.png"
+              src="/logo-mark.svg"
               alt="PEHCHAAN Emblem"
               className="w-8 h-8 object-contain rounded-sm"
             />
