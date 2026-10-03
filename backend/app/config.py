@@ -45,7 +45,7 @@ class Settings:
     ).split(",")
 
     # --- Storage ---
-    UPLOAD_DIR: Path = BACKEND_ROOT / "uploads"
+    UPLOAD_DIR: Path = Path(os.getenv("UPLOAD_DIR") or BACKEND_ROOT / "uploads")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "12"))
 
     # --- OCR ---

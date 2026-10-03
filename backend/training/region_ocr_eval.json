@@ -2,23 +2,23 @@
  "held_out_people": 60,
  "cards": 240,
  "fields_checked": 1440,
- "page_only": 0.4799,
+ "page_only": 0.5049,
  "with_regions": 0.9965,
  "made_worse": 0,
  "per_document": {
   "aadhar": {
    "fields": 240,
-   "page_only": 0.9125,
+   "page_only": 0.9708,
    "with_regions": 1.0
   },
   "pan": {
    "fields": 240,
-   "page_only": 0.0,
+   "page_only": 0.0042,
    "with_regions": 1.0
   },
   "driving_license": {
    "fields": 360,
-   "page_only": 0.1778,
+   "page_only": 0.2361,
    "with_regions": 0.9972
   },
   "passport": {
@@ -45,7 +45,7 @@
   },
   "aadhar.name": {
    "n": 60,
-   "page_only": 0.7667,
+   "page_only": 1.0,
    "with_regions": 1.0
   },
   "driving_license.date_of_birth": {
@@ -70,7 +70,7 @@
   },
   "driving_license.name": {
    "n": 60,
-   "page_only": 0.0333,
+   "page_only": 0.3833,
    "with_regions": 0.9833
   },
   "driving_license.valid_till": {
@@ -95,7 +95,7 @@
   },
   "pan.name": {
    "n": 60,
-   "page_only": 0.0,
+   "page_only": 0.0167,
    "with_regions": 1.0
   },
   "passport.date_of_birth": {
@@ -182,8 +182,8 @@
    "person": 253,
    "field": "name",
    "truth": "AJAYPATEL",
-   "page": "",
-   "merged": "",
+   "page": "SOWMANOJPATEL",
+   "merged": "SOWMANOJPATEL",
    "source": "page"
   },
   {

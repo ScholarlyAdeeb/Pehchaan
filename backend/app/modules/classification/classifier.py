@@ -40,7 +40,9 @@ class DocumentTypeClassifier:
             sys.path.append(os.path.dirname(__file__))
             from model import DocumentClassifier
 
-            self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # CLASSIFIER_DEVICE=cpu keeps the model off the GPU (needed on hosts where
+            # CUDA is only usable inside special functions, such as ZeroGPU Spaces).
+            self._device = torch.device(os.getenv("CLASSIFIER_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu"))
             model_path = Path(__file__).resolve().parent.parent.parent.parent / "training" / "document_classifier.pth"
             # The class list is written by training/train.py next to the weights.
             metrics_path = model_path.with_name(model_path.stem + "_metrics.json")

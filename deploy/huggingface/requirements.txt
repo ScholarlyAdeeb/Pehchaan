@@ -1,0 +1,17 @@
+# Engine dependencies for the Hugging Face Space. Gradio itself is installed by
+# the Space from sdk_version in README.md. CPU PyTorch: the free hardware has no GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+fastapi>=0.115.2
+uvicorn[standard]>=0.30
+python-multipart>=0.0.18
+pydantic>=2.9
+bcrypt>=4.1
+pyjwt>=2.8
+opencv-python-headless==4.10.0.84
+Pillow>=10.4
+numpy==1.26.4
+pytesseract==0.3.13
+psycopg[binary]==3.2.3
+python-dotenv>=1.0
+torch==2.13.0          # the Space also asks for torch<=2.13.0
+torchvision==0.28.0    # the release built for torch 2.13.0

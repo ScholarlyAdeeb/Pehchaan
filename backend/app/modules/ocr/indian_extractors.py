@@ -9,6 +9,8 @@ rather than relying on clean text.
 from __future__ import annotations
 
 import re
+
+from app.modules.ocr.name_finder import find_name
 from datetime import datetime
 
 
@@ -192,13 +194,11 @@ def extract_aadhaar_fields(raw_text: str) -> dict:
     if name:
         fields["name"] = name
 
-    # If no labeled name, look for lines that are just names (uppercase, 2+ words)
+    # No labelled name: look for it anywhere on the card (see name_finder).
     if "name" not in fields:
-        for line in raw_text.split("\n"):
-            line = line.strip()
-            if re.fullmatch(r"[A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?", line):
-                fields["name"] = line
-                break
+        guess = find_name(raw_text)
+        if guess:
+            fields["name"] = guess.name
 
     # DOB (or year of birth on older cards)
     dob = _value_near_label(lines, r"DOB|Date of Birth|D\.O\.B|जन्म\s*तिथि", _as_date)

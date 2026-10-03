@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from app.modules.ocr.name_finder import find_name
 from app.modules.ocr.indian_extractors import (
     extract_aadhaar_fields,
     extract_dl_fields,
@@ -97,4 +98,11 @@ def extract_fields(document_type: str, raw_text: str) -> dict:
     extractor = EXTRACTORS.get(document_type)
     if not extractor:
         return {}
-    return extractor(raw_text)
+    fields = extractor(raw_text)
+    # No labelled name: look for it anywhere on the card (see name_finder).
+    # Passports are left out: their name comes from the MRZ and the labelled page.
+    if not fields.get("name") and document_type != "passport":
+        guess = find_name(raw_text)
+        if guess:
+            fields["name"] = guess.name
+    return fields
