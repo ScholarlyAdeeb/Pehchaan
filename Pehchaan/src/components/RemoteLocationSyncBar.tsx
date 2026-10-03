@@ -85,9 +85,9 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
   };
 
   return (
-    <aside aria-label="Remote synchronization and Neon database status" className="w-full bg-[#0e131d] border-b border-[#1b2333] px-3 sm:px-6 py-2.5 text-xs text-[#94a3b8] transition-all">
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <aside aria-label="Remote synchronization and Neon database status" className="w-full bg-[#0e131d] border-b border-[#1b2333] px-3 sm:px-6 py-2 sm:py-2.5 text-xs text-[#94a3b8] transition-all">
+      <div className="flex sm:flex-wrap items-center justify-between gap-2 sm:gap-2.5">
+        <div className="flex sm:flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide border ${
               isOnline
@@ -104,15 +104,16 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
                   : 'bg-[#ef4444]'
               }`}
             />
-            <span>
+            <span className="hidden sm:inline">
               {isOnline
                 ? neonStatus?.connected ? 'NEON DB: ONLINE' : 'NEON: SYNC READY'
                 : 'OFFLINE / AIR-GAPPED'}
             </span>
+            <span className="sm:hidden">{isOnline ? (neonStatus?.connected ? 'DB online' : 'Sync ready') : 'Offline'}</span>
           </div>
 
           {checkpoint && (
-            <div className="flex items-center gap-1.5 bg-[#141b27] border border-[#222e44] rounded-lg px-2 py-1">
+            <div className="hidden sm:flex items-center gap-1.5 bg-[#141b27] border border-[#222e44] rounded-lg px-2 py-1">
               <span className="material-symbols-outlined text-[14px] text-[#60a5fa]">location_on</span>
               <span className="text-[11px] font-medium text-[#cbd5e1]">{checkpoint.name}</span>
             </div>
@@ -127,14 +128,15 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
             />
             <span className="text-[11px] font-medium text-[#cbd5e1] flex items-center gap-1">
               <span className="material-symbols-outlined text-[13px] text-[#fbbf24]">signal_cellular_alt_1_bar</span>
-              Low-Bandwidth Mode
+              <span className="hidden sm:inline">Low-Bandwidth Mode</span>
+              <span className="sm:hidden">Low data</span>
             </span>
           </label>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <div
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-mono ${
+            className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-mono ${
               queueCount > 0
                 ? 'bg-[#422006] text-[#fde047] border-[#854d0e]'
                 : 'bg-[#141b27] text-[#94a3b8] border-[#222e44]'
@@ -149,6 +151,7 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
           <button
             onClick={triggerSync}
             disabled={isSyncing}
+            aria-label={queueCount > 0 ? `Sync ${queueCount} queued records` : 'Sync to Neon'}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer shadow-xs ${
               isSyncing
                 ? 'bg-[#1e293b] text-gray-400 cursor-not-allowed'
@@ -158,7 +161,8 @@ export const RemoteLocationSyncBar: React.FC<RemoteLocationSyncBarProps> = ({ on
             }`}
           >
             <span className={`material-symbols-outlined text-[14px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
-            <span>{isSyncing ? 'Transmitting...' : 'Sync to Neon'}</span>
+            <span className="hidden sm:inline">{isSyncing ? 'Transmitting...' : 'Sync to Neon'}</span>
+            {queueCount > 0 && <span className="sm:hidden font-mono">{queueCount}</span>}
           </button>
 
           <button

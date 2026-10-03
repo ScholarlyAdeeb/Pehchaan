@@ -65,15 +65,15 @@ export const CheckpointSwitcher: React.FC = () => {
         }`}
       >
         <span className="material-symbols-outlined text-[16px]" aria-hidden="true">{method === 'gps' ? 'my_location' : method === 'global' ? 'public' : 'location_on'}</span>
-        <span className="font-semibold max-w-[160px] truncate">{checkpoint.name}</span>
+        <span className="font-semibold max-w-[96px] sm:max-w-[160px] truncate">{checkpoint.name}</span>
         {checkpoint.detection?.distanceKm !== undefined && method === 'gps' && (
-          <span className="text-[#94a3b8] font-mono">{checkpoint.detection.distanceKm} km</span>
+          <span className="hidden sm:inline text-[#94a3b8] font-mono">{checkpoint.detection.distanceKm} km</span>
         )}
         <span className="material-symbols-outlined text-[16px]" aria-hidden="true">expand_more</span>
       </button>
 
       {open && (
-        <div role="menu" className="absolute left-0 mt-1 w-72 z-50 rounded-lg border border-[#222c3e] bg-[#141b28] shadow-xl p-2 space-y-1 text-xs">
+        <div role="menu" className="absolute left-0 mt-1 w-72 max-w-[calc(100vw-4rem)] z-50 rounded-lg border border-[#222c3e] bg-[#141b28] shadow-xl p-2 space-y-1 text-xs">
           <div className="px-2 py-1.5 text-[#cbd5e1]">
             <div className="font-semibold">{METHOD_TEXT[method || 'manual']}</div>
             {checkpoint.detection?.note && <div className="text-[#a3aec0] mt-0.5">{checkpoint.detection.note}</div>}

@@ -124,7 +124,7 @@ export const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto pb-32 print:pb-6">
+    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto pb-28 lg:pb-32 print:pb-6">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-4 border-b border-[#efedf3]">
         <div className="space-y-1 min-w-0">
@@ -279,14 +279,14 @@ export const ScreeningReportView: React.FC<ScreeningReportViewProps> = ({
       </section>
 
       {/* Officer decision */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-[#efedf3] p-3 print:hidden">
+      <div className="fixed left-0 right-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] lg:bottom-0 z-40 bg-white/95 backdrop-blur border-t border-[#efedf3] p-2.5 sm:p-3 print:hidden">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="text-xs text-[#414753]">
+          <span className="hidden sm:inline text-xs text-[#414753]">
             <span className="font-semibold text-[#1a1b1f]">Your decision</span> — the system advises; the officer decides.
           </span>
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:justify-center">
             {(Object.keys(DECISIONS) as Decision[]).map((k) => (
-              <button key={k} onClick={() => setDecision(k)} className={`px-3.5 py-2 text-xs font-semibold rounded-lg ${DECISIONS[k].style}`}>
+              <button key={k} onClick={() => setDecision(k)} className={`min-h-[44px] px-2 sm:px-3.5 py-2 text-[11px] sm:text-xs leading-tight font-semibold rounded-lg ${DECISIONS[k].style}`}>
                 {DECISIONS[k].label}
               </button>
             ))}
@@ -492,8 +492,9 @@ const MrzPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
             <tr className="text-left text-[#717785] border-b border-[#efedf3]">
               <th className="py-1.5 pr-2">Field</th>
               <th className="py-1.5 px-2">Value</th>
-              <th className="py-1.5 px-2 text-right">Printed check digit</th>
-              <th className="py-1.5 px-2 text-right">Computed (ICAO 7-3-1)</th>
+              <th className="hidden sm:table-cell py-1.5 px-2 text-right">Printed check digit</th>
+              <th className="hidden sm:table-cell py-1.5 px-2 text-right">Computed (ICAO 7-3-1)</th>
+              <th className="sm:hidden py-1.5 px-1.5 text-right" title="Printed check digit / computed (ICAO 7-3-1)">Digit</th>
               <th className="py-1.5 pl-2">Result</th>
             </tr>
           </thead>
@@ -501,14 +502,16 @@ const MrzPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
             {m.fields.map((f) => (
               <tr key={f.name} className="border-b border-[#f4f3f8]">
                 <td className="py-1.5 pr-2 font-semibold">{MRZ_FIELD_LABELS[f.name] || f.name}</td>
-                <td className="py-1.5 px-2 font-mono">{f.value}</td>
-                <td className="py-1.5 px-2 font-mono text-right">{f.check_digit_printed ?? '?'}</td>
-                <td className="py-1.5 px-2 font-mono text-right">{f.check_digit_computed ?? '?'}</td>
+                <td className="py-1.5 px-1.5 sm:px-2 font-mono break-all">{f.value}</td>
+                <td className="hidden sm:table-cell py-1.5 px-2 font-mono text-right">{f.check_digit_printed ?? '?'}</td>
+                <td className="hidden sm:table-cell py-1.5 px-2 font-mono text-right">{f.check_digit_computed ?? '?'}</td>
+                <td className="sm:hidden py-1.5 px-1.5 font-mono text-right whitespace-nowrap">{f.check_digit_printed ?? '?'} / {f.check_digit_computed ?? '?'}</td>
                 <td className="py-1.5 pl-2"><CheckResult ok={f.valid} /></td>
               </tr>
             ))}
             <tr>
-              <td className="py-1.5 pr-2 font-semibold" colSpan={4}>Composite (whole line 2)</td>
+              <td className="hidden sm:table-cell py-1.5 pr-2 font-semibold" colSpan={4}>Composite (whole line 2)</td>
+              <td className="sm:hidden py-1.5 pr-2 font-semibold" colSpan={3}>Composite (line 2)</td>
               <td className="py-1.5 pl-2"><CheckResult ok={m.composite_valid} /></td>
             </tr>
           </tbody>

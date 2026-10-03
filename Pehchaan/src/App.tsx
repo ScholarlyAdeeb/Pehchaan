@@ -106,6 +106,14 @@ function AuthenticatedApp({
     }
   }, [isAuthenticated, checkpoint, recordsLoaded, loadNeonRecords]);
 
+  // Each screen (and each report) opens at its top; the content area would
+  // otherwise keep the previous screen's scroll position.
+  const mainRef = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+    window.scrollTo(0, 0);           // on phones the page itself scrolls
+  }, [screen, selectedRecord?.id]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0c1017] flex items-center justify-center">
@@ -169,7 +177,7 @@ function AuthenticatedApp({
           onCloseMobile={() => setIsMobileMenuOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto bg-[#faf8fe] text-[#1a1b1f] pb-16 lg:pb-0">
+        <main ref={mainRef} className="flex-1 overflow-y-auto bg-[#faf8fe] text-[#1a1b1f] pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {showNotFound ? (
             <NotFoundView onGoHome={() => onNavigate('/')} />
           ) : (

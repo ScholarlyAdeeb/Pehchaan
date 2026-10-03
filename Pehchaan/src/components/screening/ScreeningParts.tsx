@@ -150,7 +150,25 @@ export const EvaluationMatrix: React.FC<{ rows?: EvaluationRow[]; compact?: bool
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Phones: one card per check. */}
+    <ul className="md:hidden divide-y divide-[#f4f3f8]">
+      {sorted.map((r) => (
+        <li key={r.check} className="py-3 space-y-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[r.status].cls}`}>{STATUS_CHIP[r.status].label}</span>
+            <span className="font-semibold text-[#1a1b1f]">{r.check}</span>
+          </div>
+          <p className="text-[#1a1b1f] leading-snug">{r.sentence}</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+            <dt className="text-[#5d6370]">How</dt><dd className="text-[#414753]">{r.method}</dd>
+            <dt className="text-[#5d6370]">Found</dt><dd className="font-mono text-[#1a1b1f] break-words">{r.measured}</dd>
+            <dt className="text-[#5d6370]">Needed</dt><dd className="text-[#414753]">{r.expected}</dd>
+          </dl>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden md:block overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[#717785] border-b border-[#efedf3]">
@@ -178,6 +196,7 @@ export const EvaluationMatrix: React.FC<{ rows?: EvaluationRow[]; compact?: bool
         </tbody>
       </table>
     </div>
+    </>
   );
 };
 

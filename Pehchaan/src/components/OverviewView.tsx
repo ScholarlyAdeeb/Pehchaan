@@ -30,12 +30,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   });
 
   return (
-    <div className="p-6 space-y-6 max-w-[1720px] mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-[1720px] mx-auto">
       {/* Hero Banner */}
-      <div className="bg-gradient-to-r from-[#0059b5] to-[#00458f] rounded-xl p-6 text-white shadow-md relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#0059b5] to-[#00458f] rounded-xl p-4 sm:p-6 text-white shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 pointer-events-none skew-x-12"></div>
 
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/15 text-xs font-mono text-white backdrop-blur-xs">
               <span className="w-2 h-2 rounded-full bg-[#72fe88] animate-ping"></span>
@@ -43,31 +43,31 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
             {isOfficer ? (
               <>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                   {t('overview.welcome')}, {user?.name}
                 </h1>
-                <p className="text-white/85 text-xs leading-relaxed">
+                <p className="hidden sm:block text-white/85 text-xs leading-relaxed">
                   {checkpoint?.name} &mdash; {t('overview.officer_subtitle')}
                 </p>
               </>
             ) : (
               <>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                   {t('overview.title')}
                 </h1>
-                <p className="text-white/85 text-xs leading-relaxed">
+                <p className="hidden sm:block text-white/85 text-xs leading-relaxed">
                   {t('overview.subtitle')}
                 </p>
               </>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
             {isOfficer && <LiveClock />}
             {(isOfficer || isAdmin) && (
               <button
                 onClick={() => onNavigate('new-scan')}
-                className="flex items-center gap-2 bg-[#ffffff] text-[#0059b5] hover:bg-[#f4f3f8] px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-all active:scale-98 cursor-pointer"
+                className="flex flex-1 sm:flex-none justify-center min-h-[44px] items-center gap-2 bg-[#ffffff] text-[#0059b5] hover:bg-[#f4f3f8] px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-all active:scale-98 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">document_scanner</span>
                 <span>{t('overview.start_screening')}</span>
@@ -76,7 +76,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             {!isOfficer && (
               <button
                 onClick={() => onNavigate('audit-trail')}
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all"
+                className="flex flex-1 sm:flex-none justify-center min-h-[44px] items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all"
               >
                 <span className="material-symbols-outlined text-[18px]">history_edu</span>
                 <span>{t('overview.audit_ledger')}</span>
@@ -87,7 +87,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-[#ffffff] p-4 rounded-xl border border-[#efedf3] shadow-2xs space-y-2">
           <div className="flex items-center justify-between text-[#717785] text-xs font-medium">
             <span>{t('overview.scans_today')}</span>

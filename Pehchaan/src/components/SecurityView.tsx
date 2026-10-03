@@ -125,7 +125,25 @@ const UsersTab: React.FC = () => {
         </div>
       )}
       <Panel title={`Accounts (${users.length})`}>
-        <div className="overflow-x-auto">
+        <ul className="md:hidden divide-y divide-[#f4f3f8]">
+          {users.map((u) => (
+            <li key={u.id} className="py-3 space-y-1.5 text-xs">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm font-semibold text-[#1a1b1f]">{u.name}</span>
+                {!u.active ? <span className="shrink-0 text-[#93000a] font-semibold">Deactivated</span>
+                  : u.must_change_password ? <span className="shrink-0 text-[#8a5600] font-semibold">Must change password</span>
+                  : <span className="shrink-0 text-[#006a26]">Active</span>}
+              </div>
+              <div className="text-[#414753] break-all">{u.email}</div>
+              <div className="text-[#5d6370]">{u.role.replace('_', ' ')} · <span className="font-mono">{u.role === 'ADMIN' ? 'all checkpoints' : u.checkpoint_ids.join(', ')}</span></div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button onClick={() => reset(u)} className="btn-ghost min-h-[40px]">Reset password</button>
+                {u.id !== me?.userId && <button onClick={() => toggle(u)} className="btn-ghost min-h-[40px]">{u.active ? 'Deactivate' : 'Reactivate'}</button>}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="text-left text-[#717785] border-b border-[#efedf3]">
               <th className="py-2 pr-3">Name</th><th className="py-2 px-3">Email</th><th className="py-2 px-3">Role</th><th className="py-2 px-3">Checkpoints</th><th className="py-2 px-3">Status</th><th className="py-2 pl-3" />

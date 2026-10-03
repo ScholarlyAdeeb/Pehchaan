@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 205" role="img" aria-label="PEHCHAAN — Identity Verification System">
+  <defs>
+    <linearGradient id="pehchaan-shield-light" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="205">
+      <stop offset="0" stop-color="#F58A33"/><stop offset="0.283" stop-color="#F58A33"/>
+      <stop offset="0.283" stop-color="#0B1829"/><stop offset="0.615" stop-color="#0B1829"/>
+      <stop offset="0.615" stop-color="#17AB4A"/><stop offset="1" stop-color="#17AB4A"/>
+    </linearGradient>
+  </defs>
+  <path d="M34.7 55 L100 29 L165.3 55 V126 C165.3 150 130 168 100 181 C70 168 34.7 150 34.7 126 Z" fill="none" stroke="url(#pehchaan-shield-light)" stroke-width="13.5" stroke-linejoin="round"/>
+  <path d="M41.7 62 H118 A25.5 25.5 0 0 1 118 113 H79.6 V146 L63.9 137 V96.3 H116 A10.65 10.65 0 0 0 116 75 H41.7 Z" fill="#0B1829"/>
+  <path d="M41.7 62 H62 L63.6 75 H41.7 Z" fill="#F58A33"/>
+  <g fill="none" stroke="#146EF5" stroke-width="1.7" stroke-linecap="round"><path d="M98.9 146.0 V141.0 A2.6 2.6 0 0 1 104.1 141.0 V148.0"/><path d="M95.7 150.0 V141.0 A5.8 5.8 0 0 1 107.3 141.0 V147.0"/><path d="M92.5 149.0 V141.0 A9.0 9.0 0 0 1 110.5 141.0 V153.0" stroke-dasharray="14 2.2 5 2.2 30"/><path d="M89.3 154.0 V141.0 A12.2 12.2 0 0 1 113.7 141.0 V150.0" stroke-dasharray="20 2.4 9 2.4 40"/><path d="M86.1 150.0 V141.0 A15.4 15.4 0 0 1 116.9 141.0 V155.0" stroke-dasharray="9 2.4 26 2.4 12 2.4 40"/><path d="M82.9 153.0 V141.0 A18.6 18.6 0 0 1 120.1 141.0 V148.0" stroke-dasharray="16 2.6 30 2.6 9 2.6 40"/></g>
+</svg>

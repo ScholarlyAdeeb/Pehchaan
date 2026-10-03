@@ -98,7 +98,27 @@ export const SystemLogsView: React.FC = () => {
             <p className="text-sm text-[#717785] mt-3">{t('logs.no_logs')}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="md:hidden divide-y divide-[#efedf3]">
+            {logs.map((log) => (
+              <li key={log.id} className="px-4 py-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm font-medium text-[#1a1b1f] break-words">{log.event}</span>
+                  <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold ${statusColor(log.status)}`}>{log.status}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#414753]">
+                  <span className="truncate">{log.actor}</span>
+                  <span className="shrink-0 px-1.5 py-0.5 bg-[#efedf3] rounded text-[10px] font-mono">{log.role}</span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-[#5d6370]">
+                  <span>{log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}</span>
+                  {log.checkpoint && <span>{log.checkpoint}</span>}
+                  {log.reference_id && <span className="break-all">{log.reference_id}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-[#efedf3] bg-[#f4f3f8] text-[#414753] font-semibold text-[11px]">
@@ -134,6 +154,7 @@ export const SystemLogsView: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

@@ -26,12 +26,12 @@ export const Header: React.FC<HeaderProps> = ({
   const roleLabel = user?.role ? t(`role.${user.role.toLowerCase()}`) : '';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0c1017] border-b border-[#1b2230] px-4 py-2.5 shadow-md">
-      <div className="max-w-[1920px] mx-auto flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-30 bg-[#0c1017] border-b border-[#1b2230] px-3 sm:px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 sm:py-2.5 shadow-md">
+      <div className="max-w-[1920px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={onToggleMobileMenu}
-            className="lg:hidden p-1.5 rounded-lg text-[#94a3b8] hover:text-white hover:bg-[#182133] transition-colors cursor-pointer"
+            className="lg:hidden p-2 -ml-1 rounded-lg text-[#94a3b8] hover:text-white hover:bg-[#182133] transition-colors cursor-pointer"
             aria-label="Toggle navigation menu"
           >
             <span className="material-symbols-outlined text-[22px]">
@@ -41,14 +41,14 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onNavigate('overview')}
-            className="flex items-center gap-2.5 text-left focus:outline-hidden group cursor-pointer"
+            className="flex items-center gap-2.5 text-left focus:outline-hidden group cursor-pointer shrink-0"
           >
             <img
               src="/logo-mark.svg"
               alt="PEHCHAAN Emblem"
               className="w-8 h-8 object-contain rounded-sm"
             />
-            <div>
+            <div className="hidden sm:block">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-white text-[15px] tracking-tight group-hover:text-[#60a5fa] transition-colors">
                   {t('app.name')}
@@ -81,13 +81,13 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {checkpoint && (
-            <div className="ml-2 pl-2 sm:ml-3 sm:pl-3 border-l border-[#1b2230]">
+            <div className="ml-1 pl-2 sm:ml-3 sm:pl-3 border-l border-[#1b2230] min-w-0">
               <CheckpointSwitcher />
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#94a3b8] bg-[#141b28] px-2.5 py-1 rounded-md border border-[#222c3e]">
             <span className="material-symbols-outlined text-[16px] text-[#60a5fa]">fact_check</span>
             <span>{t('header.scans_today')}:</span>
@@ -128,11 +128,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
                 <div className="text-[10px] text-[#8a94a6]">{roleLabel}</div>
               </div>
-              <span className="material-symbols-outlined text-[16px] text-[#717785]">expand_more</span>
+              <span className="material-symbols-outlined text-[16px] text-[#717785] hidden sm:inline-block">expand_more</span>
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-[#101522] rounded-lg shadow-2xl border border-[#242f44] py-1 text-xs z-50">
+              <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] bg-[#101522] rounded-lg shadow-2xl border border-[#242f44] py-1 text-xs z-50">
                 <div className="px-3 py-2 border-b border-[#242f44] bg-[#141b2a]">
                   <p className="font-semibold text-white">{user?.name}</p>
                   <p className="text-[10px] font-mono text-[#8a94a6]">{user?.email}</p>
