@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, Language } from '../contexts/I18nContext';
+import { TricolorBackdrop } from './TricolorBackdrop';
 
 interface LoginViewProps {
   onNavigatePage?: (page: 'privacy' | 'terms') => void;
@@ -14,6 +15,16 @@ const FORM_START = 1700;
 const FORM_STEP = 45;
 
 const BOOT_DOCUMENTS = ['Aadhaar', 'PAN', 'Passport', 'Visa', 'Driving licence', 'National ID'] as const;
+
+// Shared look for the form controls: soft white fields, hairline border, blue focus ring.
+const FIELD = 'w-full py-2.5 rounded-xl bg-white/80 hover:bg-white/95 focus:bg-white text-[13px] text-[#1a1b1f] '
+  + 'placeholder:text-[#9aa1ad] border border-slate-200/80 focus:border-[#0059b5]/60 focus:ring-4 focus:ring-[#0059b5]/10 '
+  + 'shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus:outline-none transition-all duration-200';
+const LABEL = 'text-xs font-semibold text-[#414753] tracking-tight';
+
+const FieldIcon: React.FC<{ name: string }> = ({ name }) => (
+  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] text-[#5f5e60]/60 pointer-events-none" aria-hidden="true">{name}</span>
+);
 
 const delay = (ms: number, rise = 4) => ({ '--login-delay': `${ms}ms`, '--login-rise': `${rise}px` }) as React.CSSProperties;
 
@@ -48,6 +59,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
   const { t, lang, setLang } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [seedMsg, setSeedMsg] = useState('');
@@ -107,150 +119,200 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c1017] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="login-boot-logo relative w-24 sm:w-28 mx-auto mb-4">
-            <img src="/logo-mark.svg" alt="" className="w-full h-auto block" />
-            <span className="login-boot-sweep" aria-hidden="true" />
+    <div className="relative min-h-screen overflow-hidden bg-[#f4f5f9] flex items-center justify-center px-4 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      <TricolorBackdrop />
+      <div className="relative z-10 w-full max-w-md">
+        <div className="text-center mb-7">
+          <div className="login-boot-logo relative mx-auto mb-4 w-[84px]">
+            <div className="absolute -inset-1.5 rounded-[22px] bg-gradient-to-tr from-[#FF671F]/25 via-[#0059b5]/20 to-[#046A38]/25 blur-md opacity-80" aria-hidden="true" />
+            <div className="relative rounded-2xl bg-gradient-to-b from-white to-[#f4f3f8] p-1 border border-white/90 shadow-[0_6px_20px_rgba(0,50,130,0.12),0_1px_0_rgba(255,255,255,0.95)_inset]">
+              <div className="relative rounded-xl bg-white p-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]">
+                <div className="relative">
+                  <img src="/logo-mark-light.svg" alt="" className="w-full h-auto block" />
+                  <span className="login-boot-sweep" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
           </div>
           <img
-            src="/logo-wordmark.svg"
+            src="/logo-wordmark-light.svg"
             alt="PEHCHAAN — Identity Verification System"
-            className="login-boot-rise w-64 sm:w-72 mx-auto mb-4"
+            className="login-boot-rise w-56 sm:w-64 mx-auto mb-3"
             style={delay(420)}
           />
           <h1 className="sr-only">{t('app.name')}</h1>
-          <p className="login-boot-rise text-sm text-[#8a94a6]" style={delay(480)}>{t('login.subtitle')}</p>
-          <p className="login-boot-rise text-[11px] text-[#2563eb] font-semibold mt-2 tracking-wide uppercase" style={delay(540)}>Sign in to begin screening</p>
-          <p className="login-boot-rise text-xs text-[#7a889c] mt-1" style={delay(600)}>SIH 2026 — Problem Statement 26188</p>
+          <p className="login-boot-rise text-[12.5px] font-medium text-[#414753] tracking-tight" style={delay(480)}>{t('login.subtitle')}</p>
+          <div className="login-boot-rise pt-2 flex justify-center" style={delay(540)}>
+            <span className="inline-flex items-center px-3 py-0.5 rounded-full font-mono text-[10.5px] font-semibold tracking-wider uppercase text-[#0059b5] bg-[#0059b5]/[0.08] border border-[#0059b5]/15">
+              Sign in to begin screening
+            </span>
+          </div>
+          <p className="login-boot-rise font-mono text-[10.5px] text-[#5f5e60]/80 mt-1.5" style={delay(600)}>SIH 2026 — Problem Statement 26188</p>
         </div>
 
         <div className="relative">
-        <div className="login-boot-docs" aria-hidden="true">
-          {BOOT_DOCUMENTS.map((kind, i) => (
-            <div key={kind} className="login-boot-doc" style={delay(DOCS_START + i * DOC_STEP)}>
-              <DocumentOutline kind={kind} />
-              <span className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#7a889c]">{kind}</span>
-            </div>
-          ))}
-        </div>
-        <div className="login-boot-rise bg-[#141b28] border border-[#1b2230] rounded-2xl p-6 sm:p-8 shadow-xl" style={delay(FORM_START, 8)}>
-          <h2 className="login-boot-rise text-lg font-bold text-white mb-6" style={delay(FORM_START + FORM_STEP, 6)}>{t('login.title')}</h2>
+          <div className="login-boot-docs" aria-hidden="true">
+            {BOOT_DOCUMENTS.map((kind, i) => (
+              <div key={kind} className="login-boot-doc" style={delay(DOCS_START + i * DOC_STEP)}>
+                <DocumentOutline kind={kind} />
+                <span className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#5b6b85]">{kind}</span>
+              </div>
+            ))}
+          </div>
 
-          {error && (
-            <div className="mb-4 p-3 bg-[#3b1111] border border-[#7f1d1d] rounded-lg text-xs text-[#fca5a5]">
-              {error}
-            </div>
-          )}
+          <div
+            className="login-boot-rise relative rounded-3xl px-6 py-7 sm:p-9 bg-white/80 backdrop-blur-2xl border border-white/80 ring-1 ring-white/60 shadow-[0_24px_64px_-12px_rgba(0,35,90,0.14),0_1px_2px_rgba(255,255,255,0.9)_inset]"
+            style={delay(FORM_START, 8)}
+          >
+            {/* Tricolour edge */}
+            <div className="absolute top-0 inset-x-8 h-[3px] rounded-b-full bg-gradient-to-r from-[#FF671F] via-white to-[#046A38] shadow-[0_2px_12px_rgba(255,103,31,0.3)]" aria-hidden="true" />
 
-          {seedMsg && (
-            <div className="mb-4 p-3 bg-[#0b2e13] border border-[#166534] rounded-lg text-xs text-[#86efac]">
-              {seedMsg}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 2, 6)}>
-              <label className="text-xs font-semibold text-[#94a3b8]">{t('login.email')}</label>
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full text-sm p-3 bg-[#0c1017] border border-[#1b2230] rounded-lg text-white font-mono focus:outline-none focus:border-[#2563eb] placeholder:text-[#3e4a5c]"
-                placeholder="officer@pehchaan.gov.in"
-              />
-            </div>
-
-            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 3, 6)}>
-              <label className="text-xs font-semibold text-[#94a3b8]">{t('login.password')}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full text-sm p-3 bg-[#0c1017] border border-[#1b2230] rounded-lg text-white font-mono focus:outline-none focus:border-[#2563eb]"
-              />
-            </div>
-
-            <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 4, 6)}>
-              <label className="text-xs font-semibold text-[#94a3b8]">{t('login.language')}</label>
-              <select
-                value={lang}
-                onChange={(e) => setLang(e.target.value as Language)}
-                className="w-full text-sm p-3 bg-[#0c1017] border border-[#1b2230] rounded-lg text-white focus:outline-none focus:border-[#2563eb]"
-              >
-                <option value="en">English</option>
-                <option value="hi">हिन्दी</option>
-                <option value="ne">नेपाली</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={delay(FORM_START + FORM_STEP * 5, 6)}
-              className="login-boot-rise w-full bg-[#2563eb] hover:bg-[#1d4ed8] disabled:opacity-50 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            <h2
+              className="login-boot-rise flex items-center gap-1.5 text-[16px] font-semibold text-[#1a1b1f] tracking-tight pb-2 mb-4 border-b border-slate-200/60"
+              style={delay(FORM_START + FORM_STEP, 6)}
             >
-              <span className="material-symbols-outlined text-[18px]">login</span>
-              <span>{isLoading ? t('login.signing_in') : t('login.submit')}</span>
-            </button>
-          </form>
+              <span className="material-symbols-outlined text-[18px] text-[#0059b5]" aria-hidden="true">verified_user</span>
+              {t('login.title')}
+            </h2>
 
-          {setupAvailable && (
-            <div className="mt-6 pt-4 border-t border-[#1b2230]">
-              {!setupOpen ? (
-                <div className="text-center">
-                  <p className="text-[11px] text-[#7a889c] mb-2">No accounts exist yet.</p>
-                  <button onClick={() => setSetupOpen(true)} className="text-xs text-[#60a5fa] hover:text-[#93c5fd] font-semibold cursor-pointer">
-                    First-time setup
+            {error && (
+              <div role="alert" className="mb-4 px-3 py-2.5 rounded-xl bg-[#ff3b30]/10 border border-[#ff3b30]/25 text-xs text-[#93000a]">
+                {error}
+              </div>
+            )}
+
+            {seedMsg && (
+              <div className="mb-4 px-3 py-2.5 rounded-xl bg-[#34c759]/10 border border-[#34c759]/30 text-xs text-[#00531c]">
+                {seedMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 2, 6)}>
+                <label htmlFor="login-email" className={LABEL}>{t('login.email')}</label>
+                <div className="relative">
+                  <FieldIcon name="badge" />
+                  <input
+                    id="login-email"
+                    type="text"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    className={`${FIELD} pl-10 pr-3.5 font-mono`}
+                    placeholder="officer@pehchaan.gov.in"
+                  />
+                </div>
+              </div>
+
+              <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 3, 6)}>
+                <label htmlFor="login-password" className={LABEL}>{t('login.password')}</label>
+                <div className="relative">
+                  <FieldIcon name="lock" />
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    className={`${FIELD} pl-10 pr-11 font-mono`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-[#5f5e60]/70 hover:text-[#1a1b1f] hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0059b5]/40 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[19px]" aria-hidden="true">{showPassword ? 'visibility_off' : 'visibility'}</span>
                   </button>
                 </div>
-              ) : (
-                <form onSubmit={handleSetup} className="space-y-3">
-                  <p className="text-[11px] text-[#94a3b8]">
-                    Enter the one-time setup code printed in the server console, then create the administrator account.
-                  </p>
-                  {([
-                    ['setupCode', 'Setup code', 'text', 'off'],
-                    ['name', 'Your name', 'text', 'name'],
-                    ['email', 'Email', 'email', 'email'],
-                    ['password', 'Password (12+ characters, letters and numbers)', 'password', 'new-password'],
-                  ] as const).map(([key, label, type, ac]) => (
-                    <div key={key} className="space-y-1">
-                      <label htmlFor={"setup-" + key} className="text-[11px] font-semibold text-[#94a3b8]">{label}</label>
-                      <input
-                        id={"setup-" + key}
-                        type={type}
-                        autoComplete={ac}
-                        required
-                        value={setup[key]}
-                        onChange={(e) => setSetup({ ...setup, [key]: e.target.value })}
-                        className="w-full text-sm p-2.5 bg-[#0c1017] border border-[#1b2230] rounded-lg text-white focus:outline-none focus:border-[#2563eb]"
-                      />
-                    </div>
-                  ))}
-                  <button type="submit" disabled={seeding} className="w-full bg-[#1e293b] hover:bg-[#273449] text-white py-2.5 rounded-lg text-xs font-bold disabled:opacity-50">
-                    {seeding ? 'Creating…' : 'Create administrator'}
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+
+              <div className="login-boot-rise space-y-1.5" style={delay(FORM_START + FORM_STEP * 4, 6)}>
+                <label htmlFor="login-language" className={LABEL}>{t('login.language')}</label>
+                <div className="relative">
+                  <FieldIcon name="translate" />
+                  <select
+                    id="login-language"
+                    value={lang}
+                    onChange={(e) => setLang(e.target.value as Language)}
+                    className={`${FIELD} pl-10 pr-9 appearance-none cursor-pointer`}
+                  >
+                    <option value="en">English</option>
+                    <option value="hi">हिन्दी</option>
+                    <option value="ne">नेपाली</option>
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[18px] text-[#5f5e60]/60 pointer-events-none" aria-hidden="true">unfold_more</span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  style={delay(FORM_START + FORM_STEP * 5, 6)}
+                  className="login-boot-rise group relative w-full overflow-hidden py-3.5 px-6 rounded-xl bg-gradient-to-r from-blue-600 via-[#0059b5] to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white text-[15px] font-semibold flex items-center justify-center gap-2 border border-blue-400/40 shadow-[0_4px_16px_rgba(0,89,181,0.36),0_1px_0_rgba(255,255,255,0.4)_inset] hover:shadow-[0_6px_22px_rgba(0,89,181,0.46)] active:scale-[0.985] disabled:opacity-60 transition-all duration-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0059b5]/25 cursor-pointer"
+                >
+                  <span className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" aria-hidden="true" />
+                  <span className="relative material-symbols-outlined text-[18px]" aria-hidden="true">login</span>
+                  <span className="relative tracking-wide">{isLoading ? t('login.signing_in') : t('login.submit')}</span>
+                </button>
+              </div>
+            </form>
+
+            {setupAvailable && (
+              <div className="mt-6 pt-4 border-t border-slate-200/70">
+                {!setupOpen ? (
+                  <div className="text-center">
+                    <p className="text-[11px] text-[#5f5e60] mb-2">No accounts exist yet.</p>
+                    <button onClick={() => setSetupOpen(true)} className="text-xs text-[#0059b5] hover:text-[#00458f] font-semibold cursor-pointer">
+                      First-time setup
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSetup} className="space-y-3">
+                    <p className="text-[11px] text-[#414753]">
+                      Enter the one-time setup code printed in the server console, then create the administrator account.
+                    </p>
+                    {([
+                      ['setupCode', 'Setup code', 'text', 'off'],
+                      ['name', 'Your name', 'text', 'name'],
+                      ['email', 'Email', 'email', 'email'],
+                      ['password', 'Password (12+ characters, letters and numbers)', 'password', 'new-password'],
+                    ] as const).map(([key, label, type, ac]) => (
+                      <div key={key} className="space-y-1">
+                        <label htmlFor={'setup-' + key} className="text-[11px] font-semibold text-[#414753]">{label}</label>
+                        <input
+                          id={'setup-' + key}
+                          type={type}
+                          autoComplete={ac}
+                          required
+                          value={setup[key]}
+                          onChange={(e) => setSetup({ ...setup, [key]: e.target.value })}
+                          className={`${FIELD} px-3.5`}
+                        />
+                      </div>
+                    ))}
+                    <button type="submit" disabled={seeding} className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-[#f5f5f7] text-[#1a1b1f] text-xs font-semibold disabled:opacity-50 cursor-pointer">
+                      {seeding ? 'Creating…' : 'Create administrator'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="login-boot-rise text-center mt-6 space-y-1" style={delay(FORM_START + FORM_STEP * 6)}>
-          <p className="text-[10px] text-[#6b7a8e]">
+        <div className="login-boot-rise text-center mt-6 space-y-1.5" style={delay(FORM_START + FORM_STEP * 6)}>
+          <p className="text-[12px] font-medium text-[#414753]">
             Ministry of Home Affairs (MHA) — Sashastra Seema Bal (SSB)
           </p>
-          <p className="text-[10px] text-[#6b7a8e]">
-            <button onClick={() => onNavigatePage?.('privacy')} className="text-[#5b8ef5] hover:underline cursor-pointer">Privacy Policy</button>
-            <span className="mx-1">·</span>
-            <button onClick={() => onNavigatePage?.('terms')} className="text-[#5b8ef5] hover:underline cursor-pointer">Terms of Use</button>
+          <p className="font-mono text-[11px] text-[#5f5e60]">
+            <button onClick={() => onNavigatePage?.('privacy')} className="hover:text-[#0059b5] hover:underline underline-offset-2 cursor-pointer">Privacy Policy</button>
+            <span className="mx-2 text-[#5f5e60]/40">•</span>
+            <button onClick={() => onNavigatePage?.('terms')} className="hover:text-[#0059b5] hover:underline underline-offset-2 cursor-pointer">Terms of Use</button>
           </p>
         </div>
       </div>
