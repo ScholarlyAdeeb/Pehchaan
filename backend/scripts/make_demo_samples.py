@@ -7,6 +7,13 @@ generated identity dataset (training/data_generated).
   demo_passport_tampered.jpg  expiry year altered in the MRZ               -> check digits fail, HIGH RISK
   demo_passport_clone.jpg     same passport number, another holder's name  -> conflicts with the issuing
                                                                               records, HIGH RISK
+  demo_aadhaar_name_swap.jpg  Aadhaar with the holder's name re-printed     -> the number belongs to someone
+                                                                              else in the issuing records
+  demo_dl_photo_swap.jpg      driving licence with another person's photo  -> face match fails against the
+  demo_dl_live_holder.jpg     ... and the real holder's face, to upload       holder's live photo; the pasted
+                              as the live photo                               photo re-compresses differently
+  demo_pan_dob_altered.jpg    PAN with the birth year moved back 8 years    -> date of birth disagrees with
+                                                                              the issuing records
 
 The forgeries are made the way a forger would: the field is painted over and
 re-printed in place. The exact boxes come from the generator's annotations.
@@ -64,6 +71,44 @@ def reprint(page: np.ndarray, bbox: dict, text: str, fonts: list[str], fit_width
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
+def _card(doc: str, person: int) -> tuple[np.ndarray, dict, dict, dict]:
+    stem = f"{doc}_{person:04d}"
+    source, ann_path = DATA / doc / f"{stem}.jpg", DATA / "annotations" / doc / f"{stem}.json"
+    if not source.is_file() or not ann_path.is_file():
+        raise SystemExit(f"{source} not found; generate the dataset first (scripts/cardgen/generate.py).")
+    ann = json.loads(ann_path.read_text(encoding="utf-8"))
+    boxes: dict = {}
+    for r in ann["text_regions"]:
+        boxes.setdefault(r["field"], r["bbox"])  # first occurrence (the front of the card)
+    photo = next(r["bbox"] for r in ann["regions"] if r["kind"] == "photo")
+    return cv2.imread(str(source)), ann["fields"], boxes, photo
+
+
+def make_card_forgeries(person: int, sans: list[str], save) -> None:
+    # Aadhaar: the name is re-printed; the number still belongs to the real holder.
+    page, fields, box, _ = _card("aadhar", person)
+    name = f"{CLONE_HOLDER['given'].title()} {CLONE_HOLDER['surname'].title()}"
+    save("demo_aadhaar_name_swap.jpg", reprint(page, box["Aadhaar_Name"], name, sans, fit_width=False))
+
+    # Driving licence: another person's photo pasted over the holder's.
+    page, _, _, photo = _card("driving_license", person)
+    other, _, _, other_photo = _card("driving_license", person + 1)
+    x, y, w, h = photo["x"], photo["y"], photo["w"], photo["h"]
+    ox, oy, ow, oh = other_photo["x"], other_photo["y"], other_photo["w"], other_photo["h"]
+    save("demo_dl_live_holder.jpg", page[y:y + h, x:x + w].copy())
+    # The pasted photo went through its own JPEG round trip, as a cut-out from another file would.
+    patch = cv2.resize(other[oy:oy + oh, ox:ox + ow], (w, h), interpolation=cv2.INTER_AREA)
+    patch = cv2.imdecode(cv2.imencode(".jpg", patch, [cv2.IMWRITE_JPEG_QUALITY, 60])[1], cv2.IMREAD_COLOR)
+    swapped = page.copy()
+    swapped[y:y + h, x:x + w] = patch
+    save("demo_dl_photo_swap.jpg", swapped)
+
+    # PAN: birth year moved back so the holder appears older.
+    page, fields, box, _ = _card("pan", person)
+    d, m, yr = fields["PAN_DOB"].split("/")
+    save("demo_pan_dob_altered.jpg", reprint(page, box["PAN_DOB"], f"{d}/{m}/{int(yr) - 8}", sans, fit_width=True))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--person", type=int, default=1, help="serial number of the dataset person to use")
@@ -96,8 +141,10 @@ def main() -> None:
     clone = reprint(clone, box["Passport_MRZ_Line_1"], line1, mono, fit_width=True)
     save("demo_passport_clone.jpg", clone)
 
+    make_card_forgeries(args.person, sans, save)
+
     print(f"Source: {stem} ({fields['Passport_Given_Name']} {fields['Passport_Surname']})")
-    print("Wrote:", *sorted(p.name for p in OUT.glob("demo_passport_*.jpg")), sep="\n  ")
+    print("Wrote:", *sorted(p.name for p in OUT.glob("demo_*.jpg")), sep="\n  ")
 
 
 if __name__ == "__main__":
