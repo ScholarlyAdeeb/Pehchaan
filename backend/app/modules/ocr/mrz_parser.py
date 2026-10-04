@@ -208,7 +208,98 @@ def _fix_document_number(line2: str) -> tuple[str, str | None]:
     return line2, None
 
 
-def parse_mrz(raw_text: str) -> MRZResult:
+# Characters OCR commonly mistakes for one another in the OCR-B MRZ font.
+_CONFUSABLE = {
+    "0": "8OD6", "1": "7I4", "2": "Z7", "3": "8B9", "4": "9A1", "5": "6S", "6": "5G80",
+    "7": "12", "8": "3B06", "9": "48", "<": "KCE", "O": "0", "D": "0", "B": "83",
+    "S": "5", "Z": "2", "G": "6", "I": "1", "K": "<", "C": "<", "E": "<",
+}
+# (field start, field end, check-digit position) on TD3 line 2
+_TD3_CHECKED_FIELDS = {
+    "passport_number": (0, 9, 9),
+    "date_of_birth": (13, 19, 19),
+    "date_of_expiry": (21, 27, 27),
+    "personal_number": (28, 42, 42),
+}
+
+
+def _digit_ok(value: str, check: str) -> bool:
+    if check == "<" and not value.strip("<"):
+        return True  # an empty optional field may carry '<' as its check digit
+    try:
+        return check.isdigit() and compute_check_digit(value) == int(check)
+    except ValueError:
+        return False
+
+
+def _composite_ok(line2: str) -> bool:
+    try:
+        return line2[43].isdigit() and compute_check_digit(line2[0:10] + line2[13:20] + line2[21:43]) == int(line2[43])
+    except ValueError:
+        return False
+
+
+def _repair_by_check_digits(line2: str, printed: dict | None) -> tuple[str, str | None]:
+    """When exactly one date's check digit fails, look for the single misread
+    character that explains it. Check digits alone are not enough (a random
+    wrong digit usually has some other one-character 'fix' that also passes),
+    so a candidate must also give the date printed on the page, and must
+    satisfy that field's and the composite check digits. Without a printed
+    date the line is left exactly as read."""
+    failing = [name for name, (a, b, c) in _TD3_CHECKED_FIELDS.items()
+               if not _digit_ok(line2[a:b], line2[c])]
+    # Only the two date fields sit at a different 7-3-1 phase in the composite
+    # than in their own check, which makes the two constraints independent.
+    # For the number and optional-data fields the composite repeats the field
+    # check, so a repair there would be guesswork.
+    if len(failing) != 1 or failing[0] not in ("date_of_birth", "date_of_expiry"):
+        return line2, None
+    a, b, c = _TD3_CHECKED_FIELDS[failing[0]]
+    want = (printed or {}).get(failing[0]) or ""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", want):
+        return line2, None
+    want = want[2:4] + want[5:7] + want[8:10]
+    found: set[str] = set()
+    # Only the date characters: a check digit that disagrees with an
+    # (edited) date is exactly the alteration signal, never something to fix.
+    for pos in range(a, b):
+        for alt in _CONFUSABLE.get(line2[pos], ""):
+            if not alt.isdigit():
+                continue  # date fields hold digits only
+            cand = line2[:pos] + alt + line2[pos + 1:]
+            if cand[a:b] == want and _digit_ok(cand[a:b], cand[c]) and _composite_ok(cand):
+                found.add(cand)
+    if len(found) != 1:
+        return line2, None
+    fixed = found.pop()
+    pos = next(i for i in range(44) if fixed[i] != line2[i])
+    return fixed, (f"MRZ character {pos + 1} of line 2 read as '{line2[pos]}' by OCR; taken as "
+                   f"'{fixed[pos]}' because that reading matches the printed {failing[0].replace('_', ' ')} "
+                   "and satisfies both its own and the composite check digits.")
+
+
+def reconcile_name_with_print(mrz_name: str | None, printed_name: str | None) -> str | None:
+    """Undo a doubled or stray letter OCR added to an MRZ name token (e.g.
+    'KKUMAR') when the printed page carries the same token without it."""
+    if not mrz_name or not printed_name:
+        return mrz_name
+    printed = {t for t in re.split(r"\s+", printed_name.upper()) if len(t) >= 3}
+    out = []
+    for tok in mrz_name.split():
+        up = tok.upper()
+        if up not in printed:
+            for i in range(len(up)):
+                if up[:i] + up[i + 1:] in printed:
+                    tok = up[:i] + up[i + 1:]
+                    break
+        out.append(tok)
+    return " ".join(out)
+
+
+def parse_mrz(raw_text: str, printed: dict | None = None) -> MRZResult:
+    """`printed` optionally carries dates read from the printed page
+    ({"date_of_birth": "YYYY-MM-DD", "date_of_expiry": ...}); they are used only
+    to confirm the repair of a single misread MRZ date character."""
     lines = _find_td3_lines(raw_text)
     if not lines:
         return MRZResult(detected=False, warnings=["No MRZ block detected in OCR output."])
@@ -217,7 +308,10 @@ def parse_mrz(raw_text: str) -> MRZResult:
     line1 = _fix_name_filler(line1)
     line2 = _fix_personal_filler(_fix_numeric_positions(line2))
     line2, number_corrected = _fix_document_number(line2)
+    line2, repair_note = _repair_by_check_digits(line2, printed)
     warnings: list[str] = []
+    if repair_note:
+        warnings.append(repair_note)
     if number_corrected:
         warnings.append(
             f"Document number read as '{number_corrected}' by OCR; corrected O/0 or I/1 confusion "

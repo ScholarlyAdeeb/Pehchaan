@@ -76,3 +76,10 @@ def test_inconclusive_face_cannot_be_cleared():
 def test_face_match_keeps_clean_document_clear():
     report = compute_risk(_validation(), _tampering(5), _face(0.8, "match"))
     assert report.verdict == "CLEAR"
+
+
+def test_unread_name_or_number_cannot_be_cleared():
+    report = compute_risk(_validation(), _tampering(0), unread_identity=["name", "document number"])
+    assert report.verdict == "REVIEW"
+    assert any("could not be read" in o for o in report.overrides)
+    assert compute_risk(_validation(), _tampering(0), unread_identity=[]).verdict == "CLEAR"

@@ -25,6 +25,10 @@ from app.storage import file_store
 logger = logging.getLogger(__name__)
 
 _HIGH_RISK_VERDICTS = {"HIGH RISK", "REJECT"}
+# Officer decisions that confirm an earlier flag. The system's own unreviewed
+# verdicts are not evidence: counting them would let one OCR misread raise
+# every later screening of the same genuine document.
+_CONFIRMING_DECISIONS = {"reject", "secondary", "clear_refused"}
 
 
 @dataclass
@@ -35,6 +39,7 @@ class PriorRecord:
     verdict: str | None
     checkpoint: str | None
     when: str | None
+    officer_decision: str | None = None  # latest officer decision on that screening, if any
 
 
 @dataclass
@@ -86,22 +91,31 @@ def _fetch_from_postgres(doc_number: str, exclude_id: str | None) -> list[PriorR
     with psycopg.connect(settings.DATABASE_URL, connect_timeout=5) as conn:
         # New records store only a keyed hash of the number; records saved
         # before hashing was introduced still hold the plain number.
+        has_decisions = conn.execute("SELECT to_regclass('pehchaan_decisions') IS NOT NULL").fetchone()[0]
+        decision_col = (
+            # A clear still awaiting co-signature is not a decision yet; one the
+            # In-Charge refused upholds the flag.
+            "(SELECT CASE WHEN d.status = 'cosign_refused' THEN 'clear_refused' ELSE d.decision END"
+            " FROM pehchaan_decisions d WHERE d.scan_id = s.id AND d.status <> 'pending_cosign'"
+            " ORDER BY d.created_at DESC LIMIT 1)"
+            if has_decisions else "NULL"
+        )
         rows = conn.execute(
-            """
-            SELECT id, presenter_name, dob, risk_verdict, lane, created_at
-            FROM pehchaan_scans
-            WHERE (doc_number_hash = %s
-                   OR (doc_number_hash IS NULL
-                       AND regexp_replace(upper(coalesce(doc_number, '')), '[^A-Z0-9]', '', 'g') = %s))
-              AND (%s::text IS NULL OR id <> %s::text)
-            ORDER BY created_at DESC
+            f"""
+            SELECT s.id, s.presenter_name, s.dob, s.risk_verdict, s.lane, s.created_at, {decision_col}
+            FROM pehchaan_scans s
+            WHERE (s.doc_number_hash = %s
+                   OR (s.doc_number_hash IS NULL
+                       AND regexp_replace(upper(coalesce(s.doc_number, '')), '[^A-Z0-9]', '', 'g') = %s))
+              AND (%s::text IS NULL OR s.id <> %s::text)
+            ORDER BY s.created_at DESC
             LIMIT 25
             """,
             (doc_hash, doc_number, exclude_id, exclude_id),
         ).fetchall()
     return [
         PriorRecord(id=r[0], name=r[1], dob=r[2], verdict=r[3], checkpoint=r[4],
-                    when=r[5].isoformat() if r[5] else None)
+                    when=r[5].isoformat() if r[5] else None, officer_decision=r[6])
         for r in rows
     ]
 
@@ -115,6 +129,7 @@ def _fetch_from_memory(doc_number: str) -> list[PriorRecord]:
         out.append(PriorRecord(
             id=rec.get("id"), name=fields.get("name"), dob=fields.get("date_of_birth"),
             verdict=(rec.get("risk") or {}).get("verdict"), checkpoint=None, when=rec.get("timestamp"),
+            officer_decision=rec.get("officer_decision"),
         ))
     return out
 
@@ -187,7 +202,8 @@ def check_against_records(
     name_conflicts = [p for p in prior if p.name and name and
                       _name_similarity(p.name, name) < settings.RECORDS_NAME_MATCH_THRESHOLD]
     dob_conflicts = [p for p in prior if p.dob and dob and p.dob.strip() != dob.strip()]
-    flagged = [p for p in prior if (p.verdict or "").upper() in _HIGH_RISK_VERDICTS]
+    flagged = [p for p in prior if (p.officer_decision or "").lower() in _CONFIRMING_DECISIONS]
+    unreviewed = [p for p in prior if not p.officer_decision and (p.verdict or "").upper() in _HIGH_RISK_VERDICTS]
 
     if name_conflicts:
         p = name_conflicts[0]
@@ -213,11 +229,19 @@ def check_against_records(
         result.status, result.risk = "flagged_history", 50
         result.issues.append(RecordIssue(
             "RECORD_PRIOR_HIGH_RISK",
-            f"This document number was rated HIGH RISK in {len(flagged)} earlier screening(s) (latest: {flagged[0].id}).",
+            f"An officer sent this document number to secondary inspection or rejected it in {len(flagged)} "
+            f"earlier screening(s) (latest: {flagged[0].id}).",
             "warning",
         ))
-        result.summary = "Details match earlier screenings, but this number was flagged before."
+        result.summary = "Details match earlier screenings, but an officer flagged this number before."
     else:
         result.status, result.risk = "consistent", 0
         result.summary = f"Name and date of birth match {len(prior)} earlier screening(s) of this number."
+        if unreviewed:
+            result.issues.append(RecordIssue(
+                "RECORD_PRIOR_UNREVIEWED_FLAG",
+                f"The system rated this number HIGH RISK in {len(unreviewed)} earlier screening(s) that no officer "
+                "reviewed; those verdicts are not counted against this one.",
+                "info",
+            ))
     return result

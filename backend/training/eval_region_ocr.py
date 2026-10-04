@@ -67,7 +67,7 @@ def main():
     import torch
     from app.modules.localization.detector import create_detector
     from app.modules.ocr.engine import run_ocr
-    from app.modules.ocr.field_extractors import extract_fields
+    from app.modules.ocr.field_extractors import extract_fields, extract_fields_from_readings
     from app.modules.ocr.region_fields import merge_region_fields, read_regions
 
     people = torch.load(MODEL, map_location="cpu", weights_only=True)["val_people"]
@@ -86,7 +86,8 @@ def main():
         doc, p = job
         ann = json.loads((DATA / "annotations" / doc / f"{doc}_{p:04d}.json").read_text(encoding="utf-8"))
         img = cv2.imread(str(DATA / doc / f"{doc}_{p:04d}.jpg"))
-        page = extract_fields(doc, run_ocr(img, doc).raw_text)
+        ocr = run_ocr(img, doc)
+        page = extract_fields_from_readings(doc, ocr.raw_text, ocr.light_text)
         reads = read_regions(img, detections[job])
         merged, sources = merge_region_fields(doc, page, reads)
         rows = []

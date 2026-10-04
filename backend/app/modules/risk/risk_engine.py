@@ -16,7 +16,9 @@ score and a verdict, and records exactly how the number was produced.
        good result elsewhere must not wash out a disqualifying finding.
        A live photo that clearly belongs to someone else lifts it to at least
        85 (90 when far below the mismatch line); an inconclusive face match
-       to at least 45, so it cannot be cleared automatically.
+       to at least 45, so it cannot be cleared automatically. So does a
+       document whose holder's name or number could not be read: nothing on
+       it was verified, so it cannot be cleared either.
     5. Verdict bands: 0-30 CLEAR, 31-65 REVIEW, 66-100 REJECT (shown to
        officers as HIGH RISK).
 """
@@ -33,6 +35,7 @@ OVERRIDE_FLOOR = 66
 FACE_MISMATCH_FLOOR = 85
 FACE_MISMATCH_FLOOR_STRONG = 90
 FACE_UNCERTAIN_FLOOR = 45
+UNREAD_IDENTITY_FLOOR = 45
 
 
 @dataclass
@@ -132,7 +135,10 @@ def compute_risk(
     tampering: TamperingResult,
     face_match: FaceMatchResult | None = None,
     records=None,
+    unread_identity: list[str] | None = None,
 ) -> RiskReport:
+    """`unread_identity` names the key identity details (name, document
+    number) that could not be read from the document."""
     settings = get_settings()
     factors: list[str] = []
 
@@ -206,6 +212,14 @@ def compute_risk(
         )
         risk_score = FACE_UNCERTAIN_FLOOR
 
+    if unread_identity and risk_score < UNREAD_IDENTITY_FLOOR:
+        overrides.append(
+            f"Raised from {risk_score} to {UNREAD_IDENTITY_FLOOR}: the {' and '.join(unread_identity)} could not be "
+            "read, so the document cannot be checked against its records. An officer must read it by hand or rescan."
+        )
+        factors.append(f"Could not read the holder's {' and '.join(unread_identity)}; rescan or verify by hand.")
+        risk_score = UNREAD_IDENTITY_FLOOR
+
     if risk_score <= settings.RISK_CLEAR_MAX:
         verdict = "CLEAR"
     elif risk_score <= settings.RISK_REVIEW_MAX:
@@ -229,7 +243,7 @@ def compute_risk(
         thresholds={
             "clear_max": settings.RISK_CLEAR_MAX, "review_max": settings.RISK_REVIEW_MAX,
             "override_floor": OVERRIDE_FLOOR, "face_mismatch_floor": FACE_MISMATCH_FLOOR,
-            "face_uncertain_floor": FACE_UNCERTAIN_FLOOR,
+            "face_uncertain_floor": FACE_UNCERTAIN_FLOOR, "unread_identity_floor": UNREAD_IDENTITY_FLOOR,
         },
         formula="score = sum(component risk x weight) / sum(weights of components that ran)",
     )

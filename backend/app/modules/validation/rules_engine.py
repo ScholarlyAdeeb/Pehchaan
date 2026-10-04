@@ -81,9 +81,24 @@ def validate_passport(
         ))
         return _finalize(issues, checks_run=1)
 
+    # The optional-data field (file / personal number) is not an identity
+    # field and is printed nowhere else on the page, so a failed check digit
+    # there is far more often an OCR misread than an alteration. It asks for a
+    # rescan rather than flagging the traveller. Number, date of birth and
+    # expiry stay critical.
+    misread_fields = []
     for f in mrz.fields:
         checks += 1
-        if f.valid is False:
+        if f.valid is False and f.name == "personal_number":
+            misread_fields.append(f.name)
+            issues.append(ValidationIssue(
+                code="MRZ_CHECKSUM_PERSONAL_NUMBER",
+                message=f"MRZ check digit for the optional-data field does not match (printed {f.check_digit_expected}, computed {f.check_digit_found}). "
+                        "This field is not an identity field and usually fails from an OCR misread: rescan the MRZ or read it manually.",
+                severity="warning",
+                field=f.name,
+            ))
+        elif f.valid is False:
             issues.append(ValidationIssue(
                 code=f"MRZ_CHECKSUM_{f.name.upper()}",
                 message=f"MRZ check digit for '{f.name}' does not match (expected {f.check_digit_expected}, computed {f.check_digit_found}). This field may have been altered.",
@@ -99,7 +114,15 @@ def validate_passport(
             ))
 
     checks += 1
-    if mrz.composite_valid is False:
+    if mrz.composite_valid is False and misread_fields:
+        # The composite covers the optional-data field too, so the same misread explains it.
+        issues.append(ValidationIssue(
+            code="MRZ_COMPOSITE_CHECKSUM",
+            message="MRZ composite check digit failed, which the misread optional-data field above already explains. "
+                    "Rescan the MRZ to confirm.",
+            severity="warning",
+        ))
+    elif mrz.composite_valid is False:
         issues.append(ValidationIssue(
             code="MRZ_COMPOSITE_CHECKSUM",
             message="MRZ composite (overall) check digit failed. Strong indicator of tampering or a fraudulent document.",

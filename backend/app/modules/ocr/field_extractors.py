@@ -94,6 +94,16 @@ EXTRACTORS = {
 }
 
 
+def extract_fields_from_readings(document_type: str, primary: str, secondary: str = "") -> dict:
+    """Fields from the primary reading, with any it missed filled in from the
+    secondary one. The primary's values are never replaced."""
+    fields = extract_fields(document_type, primary)
+    if secondary:
+        for key, value in extract_fields(document_type, secondary).items():
+            fields.setdefault(key, value)
+    return fields
+
+
 def extract_fields(document_type: str, raw_text: str) -> dict:
     extractor = EXTRACTORS.get(document_type)
     if not extractor:

@@ -31,6 +31,21 @@ def preprocess_for_ocr(
     return gray
 
 
+def preprocess_variants(image: np.ndarray, document_type: str = "passport") -> tuple[np.ndarray, np.ndarray]:
+    """Two readings of the same page, with identical geometry:
+    - full: denoised and contrast-enhanced, which helps phone photos;
+    - light: only upscaled, rotated and deskewed. Denoising blurs small,
+      crisp print (an e-Aadhaar printout, a scanner image) past what
+      Tesseract can read, and that is where this one wins.
+    The OCR engine reads both and keeps the better reading."""
+    img = _upscale_if_small(image.copy(), 300)
+    img = _correct_orientation(img)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+    light = _deskew(gray)
+    full = _enhance_contrast(_denoise(light, document_type), document_type)
+    return full, light
+
+
 def preprocess_for_mrz(image: np.ndarray) -> np.ndarray:
     """Aggressive preprocessing tuned for the MRZ zone at the bottom of a passport."""
     img = image.copy()

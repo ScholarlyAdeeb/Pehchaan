@@ -66,6 +66,9 @@ class OCRWord:
 @dataclass
 class OCRResult:
     raw_text: str
+    # Reading of the lightly processed page (see preprocess_variants); the
+    # field extractors fill in what raw_text missed from it.
+    light_text: str = ""
     words: list[OCRWord] = field(default_factory=list)
     mean_confidence: float = 0.0
     engine_available: bool = True
@@ -169,6 +172,14 @@ def _mrz_band(gray: np.ndarray, words: list[OCRWord]) -> np.ndarray | None:
     return cv2.resize(band, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
 
 
+def _lines_text(data: dict) -> str:
+    lines: dict[tuple[int, int, int], list[str]] = {}
+    for i, t in enumerate(data["text"]):
+        if t.strip():
+            lines.setdefault((data["block_num"][i], data["par_num"][i], data["line_num"][i]), []).append(t.strip())
+    return "\n".join(" ".join(parts) for parts in lines.values())
+
+
 def _tesseract_config(document_type: str) -> str:
     """Document-type-specific Tesseract config for better accuracy."""
     base = "--oem 3"
@@ -195,12 +206,12 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
     3. Full-image OCR (the reading the field extractors use)
     4. For passports: second MRZ-tuned pass on the bottom of the page
     """
-    from app.modules.ocr.preprocessing import preprocess_for_ocr, preprocess_for_mrz
+    from app.modules.ocr.preprocessing import preprocess_for_mrz, preprocess_variants
 
     # Step 0: Preprocess image for better OCR (orientation detection needs Tesseract configured)
     if _TESSERACT_AVAILABLE:
         _configure_tesseract()
-    preprocessed = preprocess_for_ocr(image, document_type)
+    preprocessed, light = preprocess_variants(image, document_type)
 
     # Step 1: Document region localization (if a trained model is configured).
     # Its boxes are reported as evidence alongside the full-page reading; they
@@ -234,10 +245,11 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
     config = _tesseract_config(document_type)
 
     try:
-        # Run on preprocessed (grayscale, deskewed, denoised) image
-        data = pytesseract.image_to_data(
-            preprocessed, output_type=Output.DICT, config=config,
-        )
+        # The denoised page is the primary reading. The lightly processed one
+        # is read too: on crisp, small print it succeeds where denoising has
+        # blurred the text away (see preprocess_variants).
+        data = pytesseract.image_to_data(preprocessed, output_type=Output.DICT, config=config)
+        light_data = pytesseract.image_to_data(light, output_type=Output.DICT, config=config)
     except pytesseract.TesseractNotFoundError:
         return OCRResult(
             raw_text="",
@@ -295,6 +307,7 @@ def run_ocr(image: np.ndarray, document_type: str = "passport") -> OCRResult:
 
     return OCRResult(
         raw_text=main_text,
+        light_text=_lines_text(light_data),
         words=words,
         mean_confidence=round(mean_conf, 2),
         region_detection=region_result,

@@ -2,28 +2,28 @@
  "held_out_people": 60,
  "cards": 240,
  "fields_checked": 1440,
- "page_only": 0.5049,
+ "page_only": 0.575,
  "with_regions": 0.9965,
  "made_worse": 0,
  "per_document": {
   "aadhar": {
    "fields": 240,
-   "page_only": 0.9708,
+   "page_only": 1.0,
    "with_regions": 1.0
   },
   "pan": {
    "fields": 240,
-   "page_only": 0.0042,
+   "page_only": 0.2458,
    "with_regions": 1.0
   },
   "driving_license": {
    "fields": 360,
-   "page_only": 0.2361,
+   "page_only": 0.3111,
    "with_regions": 0.9972
   },
   "passport": {
    "fields": 600,
-   "page_only": 0.68,
+   "page_only": 0.695,
    "with_regions": 0.9933
   }
  },
@@ -35,7 +35,7 @@
   },
   "aadhar.gender": {
    "n": 60,
-   "page_only": 0.8833,
+   "page_only": 1.0,
    "with_regions": 1.0
   },
   "aadhar.id_number": {
@@ -50,7 +50,7 @@
   },
   "driving_license.date_of_birth": {
    "n": 60,
-   "page_only": 0.0333,
+   "page_only": 0.4833,
    "with_regions": 1.0
   },
   "driving_license.guardian_name": {
@@ -80,12 +80,12 @@
   },
   "pan.date_of_birth": {
    "n": 60,
-   "page_only": 0.0,
+   "page_only": 0.8667,
    "with_regions": 1.0
   },
   "pan.father_name": {
    "n": 60,
-   "page_only": 0.0,
+   "page_only": 0.0167,
    "with_regions": 1.0
   },
   "pan.id_number": {
@@ -95,12 +95,12 @@
   },
   "pan.name": {
    "n": 60,
-   "page_only": 0.0167,
+   "page_only": 0.1,
    "with_regions": 1.0
   },
   "passport.date_of_birth": {
    "n": 60,
-   "page_only": 0.95,
+   "page_only": 0.9833,
    "with_regions": 1.0
   },
   "passport.expiry_date": {
@@ -135,17 +135,17 @@
   },
   "passport.passport_number_visual": {
    "n": 60,
-   "page_only": 0.6833,
+   "page_only": 0.7167,
    "with_regions": 0.9833
   },
   "passport.place_of_birth": {
    "n": 60,
-   "page_only": 0.8333,
+   "page_only": 0.8667,
    "with_regions": 1.0
   },
   "passport.surname": {
    "n": 60,
-   "page_only": 0.4,
+   "page_only": 0.45,
    "with_regions": 1.0
   }
  },

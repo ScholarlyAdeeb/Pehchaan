@@ -46,9 +46,9 @@ from app.modules.face.verifier import backend_bands, backend_label, compare_face
 from app.modules.classification import auto_detect
 from app.modules.classification.classifier import classifier
 from app.modules.ocr.engine import run_ocr
-from app.modules.ocr.field_extractors import extract_fields
+from app.modules.ocr.field_extractors import extract_fields, extract_fields_from_readings
 from app.modules.ocr.region_fields import assess_layout, merge_region_fields
-from app.modules.ocr.mrz_parser import parse_mrz
+from app.modules.ocr.mrz_parser import parse_mrz, reconcile_name_with_print
 from app.modules.provenance import provenance
 from app.modules.records.crosscheck import apply_reference_check, check_against_records
 from app.modules.records.issued_documents import check_issued_document
@@ -124,7 +124,8 @@ def _tesseract_family(document_type: str) -> str:
 def _build_identity(document_type: str, fields: dict, mrz) -> IdentitySummary:
     if document_type in ("passport", "visa") and mrz is not None and mrz.detected:
         mrz_number = next((f.value.replace("<", "") for f in mrz.fields if f.name == "passport_number"), None)
-        mrz_name = " ".join(filter(None, [mrz.given_names, mrz.surname])) or None
+        mrz_name = reconcile_name_with_print(
+            " ".join(filter(None, [mrz.given_names, mrz.surname])) or None, fields.get("name"))
         return _with_pii(IdentitySummary(
             name=mrz_name or fields.get("name"),
             document_number=mrz_number or fields.get("passport_number_visual") or fields.get("visa_number"),
@@ -236,8 +237,10 @@ async def scan_document(
     # --- OCR post-processing: MRZ + field extraction ---
     mrz_summary: MRZSummary | None = None
     mrz_full = None
+    page_fields = extract_fields_from_readings(document_type, ocr_result.raw_text, ocr_result.light_text)
     if document_type in ("passport", "visa"):
-        mrz_full = mrz = parse_mrz(ocr_result.raw_text)
+        mrz_full = mrz = parse_mrz(ocr_result.raw_text, printed={
+            "date_of_birth": page_fields.get("date_of_birth"), "date_of_expiry": page_fields.get("expiry_date")})
         mrz_summary = MRZSummary(
             detected=mrz.detected,
             format=mrz.format,
@@ -257,7 +260,7 @@ async def scan_document(
             raw_lines=mrz.raw_lines,
             warnings=mrz.warnings,
         )
-    extracted_fields = extract_fields(document_type, ocr_result.raw_text)
+    extracted_fields = page_fields
     # Fields the full-page reading missed (or got in an invalid form) are taken
     # from the boxes the region detector found.
     extracted_fields, field_sources = merge_region_fields(document_type, extracted_fields, ocr_result.region_reads)
@@ -343,7 +346,9 @@ async def scan_document(
         )
 
     # --- Risk Engine ---
-    risk = compute_risk(validation, tampering, face_match, records)
+    unread = [label for label, value in (("name", identity.name), ("document number", identity.document_number))
+              if not value]
+    risk = compute_risk(validation, tampering, face_match, records, unread_identity=unread)
     evaluation = build_evaluation(
         document_type=document_type, classification=classification, identity=identity, mrz=mrz_full,
         validation=validation, tampering=tampering, face_match=face_match,
