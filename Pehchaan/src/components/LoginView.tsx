@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, Language } from '../contexts/I18nContext';
-import { TricolorBackdrop } from './TricolorBackdrop';
+import { GATE_FIELD, GATE_LABEL, GateCard, GateScreen } from './GateScreen';
 
 interface LoginViewProps {
   onNavigatePage?: (page: 'privacy' | 'terms') => void;
@@ -16,11 +16,8 @@ const FORM_STEP = 45;
 
 const BOOT_DOCUMENTS = ['Aadhaar', 'PAN', 'Passport', 'Visa', 'Driving licence', 'National ID'] as const;
 
-// Shared look for the form controls: soft white fields, hairline border, blue focus ring.
-const FIELD = 'w-full py-2.5 rounded-xl bg-white/80 hover:bg-white/95 focus:bg-white text-[13px] text-[#1a1b1f] '
-  + 'placeholder:text-[#9aa1ad] border border-slate-200/80 focus:border-[#0059b5]/60 focus:ring-4 focus:ring-[#0059b5]/10 '
-  + 'shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus:outline-none transition-all duration-200';
-const LABEL = 'text-xs font-semibold text-[#414753] tracking-tight';
+const FIELD = GATE_FIELD;
+const LABEL = GATE_LABEL;
 
 const FieldIcon: React.FC<{ name: string }> = ({ name }) => (
   <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] text-[#5f5e60]/60 pointer-events-none" aria-hidden="true">{name}</span>
@@ -119,9 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#f4f5f9] flex items-center justify-center px-4 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
-      <TricolorBackdrop />
-      <div className="relative z-10 w-full max-w-md">
+    <GateScreen>
         <div className="text-center mb-7">
           <div className="login-boot-logo relative mx-auto mb-4 w-[84px]">
             <div className="absolute -inset-1.5 rounded-[22px] bg-gradient-to-tr from-[#FF671F]/25 via-[#0059b5]/20 to-[#046A38]/25 blur-md opacity-80" aria-hidden="true" />
@@ -160,13 +155,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
             ))}
           </div>
 
-          <div
-            className="login-boot-rise relative rounded-3xl px-6 py-7 sm:p-9 bg-white/80 backdrop-blur-2xl border border-white/80 ring-1 ring-white/60 shadow-[0_24px_64px_-12px_rgba(0,35,90,0.14),0_1px_2px_rgba(255,255,255,0.9)_inset]"
-            style={delay(FORM_START, 8)}
-          >
-            {/* Tricolour edge */}
-            <div className="absolute top-0 inset-x-8 h-[3px] rounded-b-full bg-gradient-to-r from-[#FF671F] via-white to-[#046A38] shadow-[0_2px_12px_rgba(255,103,31,0.3)]" aria-hidden="true" />
-
+          <GateCard className="login-boot-rise" style={delay(FORM_START, 8)}>
             <h2
               className="login-boot-rise flex items-center gap-1.5 text-[16px] font-semibold text-[#1a1b1f] tracking-tight pb-2 mb-4 border-b border-slate-200/60"
               style={delay(FORM_START + FORM_STEP, 6)}
@@ -302,7 +291,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
                 )}
               </div>
             )}
-          </div>
+          </GateCard>
         </div>
 
         <div className="login-boot-rise text-center mt-6 space-y-1.5" style={delay(FORM_START + FORM_STEP * 6)}>
@@ -315,7 +304,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
             <button onClick={() => onNavigatePage?.('terms')} className="hover:text-[#0059b5] hover:underline underline-offset-2 cursor-pointer">Terms of Use</button>
           </p>
         </div>
-      </div>
-    </div>
+    </GateScreen>
   );
 };

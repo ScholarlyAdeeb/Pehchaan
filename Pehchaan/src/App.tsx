@@ -16,6 +16,7 @@ import { OfficerStatusView } from './components/OfficerStatusView';
 import { SystemLogsView } from './components/SystemLogsView';
 import { SecurityView } from './components/SecurityView';
 import { ChangePasswordView } from './components/ChangePasswordView';
+import { GateEmblem, GateScreen } from './components/GateScreen';
 import { RemoteLocationSyncBar } from './components/RemoteLocationSyncBar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
@@ -116,9 +117,15 @@ function AuthenticatedApp({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0c1017] flex items-center justify-center">
-        <div className="text-[#8a94a6] text-sm">Loading...</div>
-      </div>
+      <GateScreen width="max-w-xs">
+        <div className="flex flex-col items-center gap-4" role="status" aria-live="polite">
+          <GateEmblem size={72} />
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 backdrop-blur border border-white/80 shadow-sm">
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-[#0059b5]/25 border-t-[#0059b5] animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            <span className="text-[12px] font-medium text-[#414753]">Restoring your session…</span>
+          </div>
+        </div>
+      </GateScreen>
     );
   }
 
