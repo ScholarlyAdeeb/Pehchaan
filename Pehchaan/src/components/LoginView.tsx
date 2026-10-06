@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n, Language } from '../contexts/I18nContext';
 import { GATE_FIELD, GATE_LABEL, GateCard, GateScreen } from './GateScreen';
+import { DemoLoginsNote, showDemoLogins } from './DemoLoginsNote';
 
 interface LoginViewProps {
   onNavigatePage?: (page: 'privacy' | 'terms') => void;
@@ -68,6 +69,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
   useEffect(() => {
     fetch('/api/auth/setup').then((r) => r.json()).then((d) => setSetupAvailable(Boolean(d.available))).catch(() => {});
   }, []);
+
+  const pickDemo = (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,6 +311,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigatePage }) => {
             <button onClick={() => onNavigatePage?.('terms')} className="hover:text-[#0059b5] hover:underline underline-offset-2 cursor-pointer">Terms of Use</button>
           </p>
         </div>
+
+        {showDemoLogins && (
+          <>
+            {/* Wide screens: pinned beside the card. Phones: below the footer. */}
+            <DemoLoginsNote onPick={pickDemo} className="hidden xl:block fixed right-8 top-1/2 -translate-y-1/2 z-20" />
+            <div className="xl:hidden flex justify-center mt-8 mb-2">
+              <DemoLoginsNote onPick={pickDemo} className="relative" />
+            </div>
+          </>
+        )}
     </GateScreen>
   );
 };

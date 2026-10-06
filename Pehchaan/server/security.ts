@@ -20,6 +20,27 @@ const PUBLISHED_DEFAULTS = ['admin123', 'officer123', 'incharge123'];
 
 export const MIN_PASSWORD_LENGTH = 12;
 
+// Shared demo accounts, published on the sign-in page for evaluators. They are
+// never forced to change their password, and nobody can change, reset or
+// deactivate them, so one visitor cannot lock out the next. DEMO_ACCOUNTS
+// overrides the list (comma-separated emails); DEMO_ACCOUNTS=none turns it off.
+const DEFAULT_DEMO_ACCOUNTS = 'officer@pehchaan.gov.in,incharge@pehchaan.gov.in,admin@pehchaan.gov.in';
+const demoAccounts = () => {
+  const raw = process.env.DEMO_ACCOUNTS ?? DEFAULT_DEMO_ACCOUNTS;
+  if (raw.trim().toLowerCase() === 'none') return new Set<string>();
+  return new Set(raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean));
+};
+export const isDemoAccount = (email?: string | null) => !!email && demoAccounts().has(email.toLowerCase());
+
+async function refuseIfDemo(userId: string, what: string) {
+  if (demoAccounts().size === 0) return;
+  const pool = await db();
+  const row = (await pool.query('SELECT email FROM pehchaan_users WHERE id = $1', [userId])).rows[0];
+  if (row && isDemoAccount(row.email)) {
+    throw Object.assign(new Error(`This is a shared demo account; its ${what} cannot be changed.`), { status: 403 });
+  }
+}
+
 let setupCode: string | null = null;
 
 async function db() {
@@ -55,6 +76,10 @@ export async function securityStartup(): Promise<void> {
       return;
     }
     for (const u of users) {
+      if (isDemoAccount(u.email)) {
+        if (u.must_change_password) await pool.query('UPDATE pehchaan_users SET must_change_password = false WHERE id = $1', [u.id]);
+        continue;
+      }
       if (u.must_change_password) continue;
       for (const weak of PUBLISHED_DEFAULTS) {
         if (await bcrypt.compare(weak, u.password_hash)) {
@@ -100,6 +125,7 @@ export async function completeSetup(body: any): Promise<{ email: string }> {
 }
 
 export async function changePassword(userId: string, current: string, next: string): Promise<void> {
+  await refuseIfDemo(userId, 'password');
   const pool = await db();
   const row = (await pool.query('SELECT password_hash FROM pehchaan_users WHERE id = $1', [userId])).rows[0];
   if (!row || !(await bcrypt.compare(String(current || ''), row.password_hash))) {
@@ -148,11 +174,13 @@ export async function createUser(body: any): Promise<{ id: string; email: string
 }
 
 export async function setUserActive(id: string, active: boolean) {
+  await refuseIfDemo(id, 'status');
   const pool = await db();
   await pool.query('UPDATE pehchaan_users SET active = $1 WHERE id = $2', [active, id]);
 }
 
 export async function resetUserPassword(id: string): Promise<string> {
+  await refuseIfDemo(id, 'password');
   const pool = await db();
   const temporaryPassword = crypto.randomBytes(9).toString('base64url');
   const res = await pool.query(

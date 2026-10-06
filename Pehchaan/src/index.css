@@ -233,3 +233,52 @@
     display: none;
   }
 }
+
+/* Sticky note with the demo sign-ins (sign-in page). */
+.demo-note {
+  width: 17.5rem;
+  padding: 1.6rem 1.15rem 1rem;
+  background: linear-gradient(180deg, #fff59d 0%, #fff176 100%);
+  color: #3b3200;
+  border-radius: 2px 2px 14px 2px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08), 0 10px 22px -6px rgba(90, 70, 0, 0.35), inset 0 -18px 30px -24px rgba(120, 90, 0, 0.35);
+  transform: rotate(-2.2deg);
+  transition: transform 200ms ease;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+}
+.demo-note:hover { transform: rotate(0deg) scale(1.02); }
+.demo-note-tape {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 92px;
+  height: 22px;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.demo-note-title { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.demo-note-sub { margin: 0.1rem 0 0.6rem; font-size: 0.72rem; color: #5c4f00; }
+.demo-note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.demo-note-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px dashed rgba(92, 79, 0, 0.35);
+  background: rgba(255, 255, 255, 0.28);
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.demo-note-row:hover { background: rgba(255, 255, 255, 0.6); }
+.demo-note-row:focus-visible { outline: 2px solid #0059b5; outline-offset: 2px; }
+.demo-note-role { font-size: 0.82rem; font-weight: 700; }
+.demo-note-role em { font-style: normal; font-weight: 400; color: #5c4f00; }
+.demo-note-cred { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.72rem; color: #2a2400; word-break: break-all; }
+.demo-note-foot { margin: 0.6rem 0 0; font-size: 0.65rem; color: #6b5d00; text-align: right; }
+@media (prefers-reduced-motion: reduce) { .demo-note, .demo-note:hover { transform: none; transition: none; } }
