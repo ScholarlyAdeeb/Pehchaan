@@ -1,0 +1,975 @@
+From 40afef1f060bd66d2cfb3c294b015e1ca2e7de46 Mon Sep 17 00:00:00 2001
+From: Bhavya <bhavyajainkalak@gmail.com>
+Date: Thu, 15 Oct 2026 07:27:34 +0000
+Subject: [PATCH] Catch swapped photos and one face carrying two identities
+
+Page-wide ELA averages a replaced photo away (the photo is a few percent
+of the page), so the tampering module missed the most common card
+forgery. The photo frame is now compared with the rest of the card:
+ELA error per unit of edge strength, inside over outside. A clear
+result sets the floor of the forensics score.
+
+The records check links one number to two names but never one face to
+two numbers. Each document portrait is now kept as an SFace embedding
+in a local index (no image, expires with the scan) and searched on
+every screening. Same face under a different name or birth date raises
+FACE_UNDER_OTHER_IDENTITY; same face, same holder, other document is
+left alone.
+
+training/eval_portrait_ela.py measures both the old and new check on
+the generated set and suggests the alarm level.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01XSjuLo1wmhNq6sBqfVV4Lv
+---
+ .../src/components/ScreeningReportView.tsx    |   4 +-
+ Pehchaan/src/types.ts                         |   3 +-
+ README.md                                     |  24 ++-
+ backend/app/api/routes_documents.py           |  38 ++++-
+ backend/app/config.py                         |   9 ++
+ backend/app/modules/face/verifier.py          |  16 ++
+ backend/app/modules/records/face_index.py     | 143 ++++++++++++++++++
+ backend/app/modules/security/retention.py     |   4 +
+ backend/app/modules/tampering/ela.py          |  56 ++++++-
+ .../app/modules/tampering/tampering_engine.py |  87 ++++++++++-
+ backend/tests/test_face_index.py              |  74 +++++++++
+ backend/tests/test_portrait_ela.py            | 100 ++++++++++++
+ backend/training/eval_portrait_ela.py         | 142 +++++++++++++++++
+ 13 files changed, 678 insertions(+), 22 deletions(-)
+ create mode 100644 backend/app/modules/records/face_index.py
+ create mode 100644 backend/tests/test_face_index.py
+ create mode 100644 backend/tests/test_portrait_ela.py
+ create mode 100644 backend/training/eval_portrait_ela.py
+
+diff --git a/Pehchaan/src/components/ScreeningReportView.tsx b/Pehchaan/src/components/ScreeningReportView.tsx
+index 7a6e485..0b44e75 100644
+--- a/Pehchaan/src/components/ScreeningReportView.tsx
++++ b/Pehchaan/src/components/ScreeningReportView.tsx
+@@ -550,7 +550,9 @@ const TamperingPanel: React.FC<{ a: ScreeningAnalysis }> = ({ a }) => {
+                   <div className="font-semibold">{c.name}</div>
+                   <div className="text-[#717785]">{c.how}</div>
+                 </td>
+-                <td className="py-1 text-right font-mono whitespace-nowrap">{c.raw} × {c.weight} = {c.contribution}</td>
++                <td className="py-1 text-right font-mono whitespace-nowrap">
++                  {c.weight === 'floor' ? `floor ${c.raw}` : `${c.raw} × ${c.weight} = ${c.contribution}`}
++                </td>
+               </tr>
+             ))}
+           </tbody>
+diff --git a/Pehchaan/src/types.ts b/Pehchaan/src/types.ts
+index 497070b..90071c0 100644
+--- a/Pehchaan/src/types.ts
++++ b/Pehchaan/src/types.ts
+@@ -179,7 +179,8 @@ export interface ScreeningAnalysis {
+     evidence: string[];
+     ela_heatmap?: string | null;
+     copy_move_matches: number;
+-    components: { name: string; raw: number; weight: number; contribution: number; how: string }[];
++    // weight is 'floor' for a check that sets the minimum score instead of being averaged in
++    components: { name: string; raw: number; weight: number | 'floor'; contribution: number; how: string }[];
+   };
+   face: {
+     attempted: boolean;
+diff --git a/README.md b/README.md
+index 5bfe7f9..b3e7d82 100644
+--- a/README.md
++++ b/README.md
+@@ -67,9 +67,9 @@ passwords or deactivate users, so the next person can sign in too.
+ | 1. Identify the document | Aadhaar, PAN, driving licence or passport; visa and permit by printed text | MobileNetV2 classifier + printed-text markers |
+ | 2. Read the fields | Name, dates, document number, address, MRZ | Tesseract 5 OCR on the full page, plus a Faster R-CNN field detector that reads each located box on its own |
+ | 3. Validate | ICAO 9303 check digits, printed page vs MRZ, Aadhaar Verhoeff checksum, PAN and licence formats, expiry, PIN code vs state | Deterministic rules, each with a severity |
+-| 4. Look for tampering | Edited or pasted regions, cloned regions, editing-software traces | Error Level Analysis, ORB copy-move detection, EXIF inspection |
++| 4. Look for tampering | Edited or pasted regions, a swapped photo, cloned regions, editing-software traces | Error Level Analysis on the page and on the photo against the rest of the card, ORB copy-move detection, EXIF inspection |
+ | 5. Match the face | Document portrait vs live photo | OpenCV YuNet detector + SFace embeddings |
+-| 6. Check the records | Was this number issued to this holder? Was it screened before under another name? Is it a known forgery? | Issued-documents database, earlier screenings, perceptual-hash forgery registry |
++| 6. Check the records | Was this number issued to this holder? Was it screened before under another name? Was this face screened before under another identity? Is it a known forgery? | Issued-documents database, earlier screenings, face index of earlier portraits (embeddings only), perceptual-hash forgery registry |
+ | 7. Score and explain | One score, one verdict, one line of evidence per check | Weighted risk engine with hard floors |
+ | 8. Seal the record | The result cannot be altered unnoticed afterwards | Hash chain, signed audit entry, Merkle batch, Fabric anchor |
+ 
+@@ -303,7 +303,7 @@ Every signal produces its own risk from 0 (nothing wrong) to 100:
+ | Signal | Risk | Weight |
+ |---|---|---|
+ | Document validation | Sum of rule penalties (critical 30, warning 10, info 2), capped at 100 | 0.30 |
+-| Tampering forensics | ELA × 0.7 + copy-move × 0.15 + metadata × 0.15 | 0.35 |
++| Tampering forensics | ELA × 0.7 + copy-move × 0.15 + metadata × 0.15, raised to the photo-swap check's value when that is higher | 0.35 |
+ | Face match | Different person 100 · inconclusive 60 · same person (1 − similarity) × 20 | 0.20 |
+ | Records | Identity conflict 100 · previously flagged 50 · consistent 0 | 0.15 |
+ 
+@@ -318,12 +318,26 @@ the remaining weights are rescaled, so missing evidence never lowers a score.
+ 
+ | Condition | Minimum score |
+ |---|---|
+-| Any critical validation failure, a "tampered" forensics verdict, or a records conflict | 66 |
++| Any critical validation failure (including the same face under another identity), a "tampered" forensics verdict (including a swapped photo), or a records conflict | 66 |
+ | Face is clearly a different person | 85 (90 when far below the threshold) |
+ | Face inconclusive | 45 |
+ 
+ **Bands:** 0–30 CLEAR · 31–65 REVIEW · 66–100 HIGH RISK.
+ 
++**Photo swap.** Page-wide ELA rarely notices a replaced photo: the photo is a few percent
++of the page. So the photo frame (the field detector's `photo` box, or the face box grown to
++a photo frame) is compared with the rest of the card: re-compression error per unit of edge
++strength, inside over outside. A pasted photo carries its own compression history and scores
++well above a printed one; a genuine card forwarded over WhatsApp scores lower, not higher.
++At or above `PORTRAIT_ELA_RATIO_LIMIT` the forensics score is at least 60 (tampered).
++
++**Same face, another identity.** Every document portrait is kept as a 128-number SFace
++embedding (no image) in a local index with the holder details read off that card, and expires
++with the scan. A new portrait close to a stored one (cosine ≥ 0.60; this is a 1:N search, so
++the bar is well above the 1:1 band of 0.45) under a different name or date of birth raises
++`FACE_UNDER_OTHER_IDENTITY`: critical at ≥ 0.70, a warning below. Same face with the same name
++and date of birth is the same person on another document and raises nothing.
++
+ **Worked example** (the tampered passport in the first screenshot, no live photo):
+ 
+ | Signal | Risk | Effective weight | Points |
+@@ -346,7 +360,7 @@ Every report shows this table, and the same lines are written into the signed au
+ | Field reading | Tesseract full page vs full page + located fields | 48.0% → **99.65%** of 1,440 fields on the held-out cards |
+ | OCR | Tesseract 5 LSTM (English, Hindi, Nepali) | — |
+ | Face detector / matcher | OpenCV YuNet / SFace (cosine similarity; match ≥ 0.45, different < 0.30) | — |
+-| Tampering | ELA, ORB copy-move, EXIF | — |
++| Tampering | ELA (page and photo vs card), ORB copy-move, EXIF | Photo swap: run `training/eval_portrait_ela.py` on the generated set |
+ | Issued-documents database | 1,200 generated documents for 300 invented people; numbers stored as keyed hashes | — |
+ 
+ Field reading by document type:
+diff --git a/backend/app/api/routes_documents.py b/backend/app/api/routes_documents.py
+index 5e86264..03c3968 100644
+--- a/backend/app/api/routes_documents.py
++++ b/backend/app/api/routes_documents.py
+@@ -42,7 +42,7 @@ from app.models.schemas import (
+     ValidationSummary,
+ )
+ from app.modules.face.detector import detect_faces, detect_largest_face, pick_portrait
+-from app.modules.face.verifier import backend_bands, backend_label, compare_faces
++from app.modules.face.verifier import backend_bands, backend_label, compare_faces, face_embedding
+ from app.modules.classification import auto_detect
+ from app.modules.classification.classifier import classifier
+ from app.modules.ocr.engine import run_ocr
+@@ -50,13 +50,14 @@ from app.modules.ocr.field_extractors import extract_fields, extract_fields_from
+ from app.modules.ocr.region_fields import assess_layout, merge_region_fields
+ from app.modules.ocr.mrz_parser import parse_mrz, reconcile_name_with_print
+ from app.modules.provenance import provenance
++from app.modules.records import face_index
+ from app.modules.records.crosscheck import apply_reference_check, check_against_records
+ from app.modules.records.issued_documents import check_issued_document
+ from app.modules.records.forgery_registry import find_matches, fingerprint
+ from app.modules.records.pii import hash_document_number, mask_document_number
+ from app.modules.risk.evaluation import build_evaluation
+ from app.modules.risk.risk_engine import compute_risk
+-from app.modules.tampering.tampering_engine import analyze_tampering
++from app.modules.tampering.tampering_engine import analyze_tampering, check_portrait, portrait_box
+ from app.modules.validation.rules_engine import ValidationIssue, _finalize, validate_generic, validate_passport
+ from app.modules.security.timestamping import create_scan_receipt
+ from app.modules.security.signed_batches import create_signed_batch
+@@ -220,6 +221,11 @@ async def scan_document(
+         if _tesseract_family(document_type) != _tesseract_family(first_ocr_type):
+             ocr_result = await loop.run_in_executor(_pool, partial(run_ocr, doc_image, document_type))
+ 
++    # Photo swap: needs the photo frame, which comes from the field detector (or the face, failing that)
++    face_box = (portrait.x, portrait.y, portrait.w, portrait.h) if portrait else None
++    tampering = await loop.run_in_executor(_pool, partial(
++        check_portrait, tampering, doc_bytes, portrait_box(ocr_result.region_detection, face_box)))
++
+     classification = ClassificationSummary(
+         requested_type=requested_type,
+         detected_type=detection.detected_type,
+@@ -307,6 +313,27 @@ async def scan_document(
+     else:
+         validation.checks_run += 1
+ 
++    # --- Same face under another identity (one person, several cards) ---
++    doc_embedding = await loop.run_in_executor(_pool, face_embedding, doc_face_crop[0] if doc_face_crop else None)
++    face_reuse = await loop.run_in_executor(_pool, partial(
++        face_index.search, doc_embedding,
++        doc_number=identity.document_number, name=identity.name, dob=identity.date_of_birth))
++    if face_reuse.conflicts:
++        top = face_reuse.conflicts[0]
++        earlier = f"{auto_detect.LABELS.get(top.doc_type, top.doc_type or 'document')} {top.doc_masked or ''}".strip()
++        validation.issues.append(ValidationIssue(
++            code="FACE_UNDER_OTHER_IDENTITY",
++            message=(f"This portrait matches the holder of {earlier}, screened earlier as '{top.name or 'unknown'}'"
++                     f"{', born ' + top.dob if top.dob else ''} (face similarity {top.similarity:.2f}). "
++                     f"This card says '{identity.name or 'unknown'}'"
++                     f"{', born ' + identity.date_of_birth if identity.date_of_birth else ''}. "
++                     f"Same face, different identity."),
++            severity="critical" if top.similarity >= get_settings().FACE_REUSE_CERTAIN else "warning",
++        ))
++        validation = _finalize(validation.issues, validation.checks_run + 1)
++    elif face_reuse.checked:
++        validation.checks_run += 1
++
+     # --- Face verification ---
+     settings = get_settings()
+     face_match = None
+@@ -417,6 +444,13 @@ async def scan_document(
+     scan_id = file_store.save_scan(record)
+     record = file_store.get_scan(scan_id)
+ 
++    # Kept after saving: the index points at the scan, never at an unsaved result.
++    try:
++        face_index.remember(scan_id, doc_embedding, doc_number=identity.document_number,
++                            doc_type=document_type, name=identity.name, dob=identity.date_of_birth)
++    except Exception as e:  # the screening is already saved; a missed index row must not fail it
++        logger.warning("Face index not updated for scan %s: %s", scan_id, e)
++
+     # Create timestamped receipt for the scan
+     try:
+         if record is not None:
+diff --git a/backend/app/config.py b/backend/app/config.py
+index 912fd29..11c4f73 100644
+--- a/backend/app/config.py
++++ b/backend/app/config.py
+@@ -63,12 +63,21 @@ class Settings:
+     ELA_JPEG_QUALITY: int = int(os.getenv("ELA_JPEG_QUALITY", "90"))
+     ELA_SUSPICION_THRESHOLD: float = float(os.getenv("ELA_SUSPICION_THRESHOLD", "18.0"))
+     COPY_MOVE_MATCH_THRESHOLD: int = int(os.getenv("COPY_MOVE_MATCH_THRESHOLD", "100"))
++    # Portrait vs card ELA ratio that counts as a swapped photo. On drawn test cards: genuine 3.6-5.1,
++    # re-shared genuine 3.1-3.7, pasted photos 6.3-11.8. Recalibrate on the generated set with
++    # training/eval_portrait_ela.py before relying on it.
++    PORTRAIT_ELA_RATIO_LIMIT: float = float(os.getenv("PORTRAIT_ELA_RATIO_LIMIT", "5.8"))
+ 
+     # --- Records database (prior screenings, used for cross-checks) ---
+     # Same Postgres the web app writes to. Without it the cross-check falls
+     # back to scans held in this process.
+     DATABASE_URL: str | None = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+     RECORDS_NAME_MATCH_THRESHOLD: float = float(os.getenv("RECORDS_NAME_MATCH_THRESHOLD", "0.75"))
++    # Same face under another identity (records/face_index.py). 1:N search, so the bar sits well
++    # above the 1:1 SFace match band of 0.45; 0.70 and up is treated as near-certain.
++    FACE_INDEX_PATH: Path = Path(os.getenv("FACE_INDEX_PATH") or BACKEND_ROOT / "data" / "face_index.sqlite")
++    FACE_REUSE_SIMILARITY: float = float(os.getenv("FACE_REUSE_SIMILARITY", "0.60"))
++    FACE_REUSE_CERTAIN: float = float(os.getenv("FACE_REUSE_CERTAIN", "0.70"))
+ 
+     # --- Security ---
+     # Shared with the web server (Pehchaan/.env); every /api call must carry it.
+diff --git a/backend/app/modules/face/verifier.py b/backend/app/modules/face/verifier.py
+index 0d2dce1..faebe29 100644
+--- a/backend/app/modules/face/verifier.py
++++ b/backend/app/modules/face/verifier.py
+@@ -106,6 +106,22 @@ if _SFACE_PATH.is_file() and model_trusted("face_recognizer_sface"):
+ _STRONG_BACKEND = _sface is not None or _DLIB
+ 
+ 
++def face_embedding(face: np.ndarray | None) -> np.ndarray | None:
++    """Unit-length SFace embedding of one face, for searching earlier screenings.
++
++    Only the SFace network is used: its scores are calibrated (see _BANDS) and
++    the fallback is not a recognition model, so its vectors would match anyone.
++    """
++    if face is None or _sface is None:
++        return None
++    try:
++        vec = _sface._embed(face).astype(np.float32).ravel()
++    except cv2.error:
++        return None
++    norm = float(np.linalg.norm(vec))
++    return vec / norm if norm > 0 else None
++
++
+ def active_backend() -> str:
+     return "sface" if _sface is not None else "dlib" if _DLIB else "fallback"
+ 
+diff --git a/backend/app/modules/records/face_index.py b/backend/app/modules/records/face_index.py
+new file mode 100644
+index 0000000..a954d24
+--- /dev/null
++++ b/backend/app/modules/records/face_index.py
+@@ -0,0 +1,143 @@
++"""
++One face, two identities.
++
++The records check catches one document number shown under two names. It
++cannot see the opposite fraud, which the problem statement lists by name:
++one person carrying several identities. Each forged card has its own number,
++so number lookups never connect them. The face does: a forger puts their own
++photo on every card.
++
++Every screening's document portrait is stored here as a 128-number SFace
++embedding (not the image), next to the holder details read off that card.
++A new portrait is compared with all of them. A close face with the same name
++and date of birth is the same person on another document (a passport today,
++an Aadhaar last week) and is only noted. A close face under a different name
++or date of birth is the fraud.
++
++Searching one face against N stored faces makes chance matches N times more
++likely than in a 1:1 check, so the bar here sits well above the 1:1 match
++band (0.45), and only very close faces raise a critical issue.
++
++Storage is a local SQLite file on the checkpoint machine. A linear scan
++over 100k faces is ~50 MB of vectors and a few milliseconds of numpy, which
++is plenty for one post. Rows expire with the scan retention period.
++"""
++from __future__ import annotations
++
++import logging
++import sqlite3
++import threading
++import time
++from collections.abc import Iterator
++from contextlib import contextmanager
++from dataclasses import dataclass, field
++from pathlib import Path
++
++import numpy as np
++
++from app.config import get_settings
++from app.modules.records.crosscheck import _name_similarity
++from app.modules.records.pii import hash_document_number, mask_document_number
++
++logger = logging.getLogger(__name__)
++
++_lock = threading.Lock()
++
++_SCHEMA = """
++CREATE TABLE IF NOT EXISTS faces (
++    scan_id     TEXT PRIMARY KEY,
++    doc_hash    TEXT,
++    doc_masked  TEXT,
++    doc_type    TEXT,
++    name        TEXT,
++    dob         TEXT,
++    embedding   BLOB NOT NULL,
++    created_at  REAL NOT NULL
++)
++"""
++
++
++@dataclass
++class FaceHit:
++    scan_id: str
++    similarity: float
++    doc_masked: str | None
++    doc_type: str | None
++    name: str | None
++    dob: str | None
++
++
++@dataclass
++class FaceReuseResult:
++    checked: bool = False
++    conflicts: list[FaceHit] = field(default_factory=list)  # same face, different holder details
++    linked: list[FaceHit] = field(default_factory=list)  # same face, same holder, other document
++
++
++@contextmanager
++def _connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
++    path = path or get_settings().FACE_INDEX_PATH
++    path.parent.mkdir(parents=True, exist_ok=True)
++    conn = sqlite3.connect(path)
++    try:
++        conn.execute(_SCHEMA)
++        yield conn
++        conn.commit()
++    finally:
++        conn.close()
++
++
++def remember(scan_id: str, embedding: np.ndarray | None, *, doc_number: str | None, doc_type: str | None,
++             name: str | None, dob: str | None, path: Path | None = None) -> None:
++    if embedding is None:
++        return
++    vec = np.asarray(embedding, dtype=np.float32).ravel()
++    with _lock, _connect(path) as conn:
++        conn.execute(
++            "INSERT OR REPLACE INTO faces VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
++            (scan_id, hash_document_number(doc_number), mask_document_number(doc_number), doc_type,
++             name, dob, vec.tobytes(), time.time()),
++        )
++
++
++def _same_holder(hit: FaceHit, name: str | None, dob: str | None) -> bool:
++    if hit.dob and dob and hit.dob.strip() != dob.strip():
++        return False
++    return _name_similarity(hit.name, name) >= get_settings().RECORDS_NAME_MATCH_THRESHOLD
++
++
++def search(embedding: np.ndarray | None, *, doc_number: str | None, name: str | None, dob: str | None,
++           path: Path | None = None) -> FaceReuseResult:
++    if embedding is None:
++        return FaceReuseResult()
++
++    with _lock, _connect(path) as conn:
++        rows = conn.execute(
++            "SELECT scan_id, doc_hash, doc_masked, doc_type, name, dob, embedding FROM faces").fetchall()
++    if not rows:
++        return FaceReuseResult(checked=True)
++
++    stored = np.frombuffer(b"".join(r[6] for r in rows), dtype=np.float32).reshape(len(rows), -1)
++    query = np.asarray(embedding, dtype=np.float32).ravel()
++    scores = stored @ query  # all vectors are unit length, so this is cosine similarity
++
++    bar = get_settings().FACE_REUSE_SIMILARITY
++    this_doc = hash_document_number(doc_number)
++    result = FaceReuseResult(checked=True)
++    for i in np.argsort(-scores):
++        if scores[i] < bar:
++            break
++        scan_id, doc_hash, doc_masked, doc_type, prior_name, prior_dob, _ = rows[i]
++        if this_doc and doc_hash == this_doc:
++            continue  # the same document screened again: the number check already covers it
++        hit = FaceHit(scan_id, round(float(scores[i]), 3), doc_masked, doc_type, prior_name, prior_dob)
++        (result.linked if _same_holder(hit, name, dob) else result.conflicts).append(hit)
++    return result
++
++
++def forget_older_than(days: int, dry_run: bool = False, path: Path | None = None) -> int:
++    cutoff = time.time() - days * 86400
++    with _lock, _connect(path) as conn:
++        if dry_run:
++            return conn.execute("SELECT COUNT(*) FROM faces WHERE created_at < ?", (cutoff,)).fetchone()[0]
++        return conn.execute("DELETE FROM faces WHERE created_at < ?", (cutoff,)).rowcount
+diff --git a/backend/app/modules/security/retention.py b/backend/app/modules/security/retention.py
+index 7850fbe..cd2f9d7 100644
+--- a/backend/app/modules/security/retention.py
++++ b/backend/app/modules/security/retention.py
+@@ -15,6 +15,7 @@ from pathlib import Path
+ from typing import Optional
+ 
+ from app.config import get_settings
++from app.modules.records import face_index
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -67,6 +68,9 @@ def apply_retention_policy(
+     # Clean up audit logs
+     deleted["audit_logs"] = _cleanup_audit_logs(policy.audit_log_retention_days, dry_run)
+ 
++    # Face embeddings live exactly as long as the scans they came from
++    deleted["face_index"] = face_index.forget_older_than(policy.scan_retention_days, dry_run)
++
+     if dry_run:
+         logger.info("Retention dry run: would delete %s", deleted)
+     else:
+diff --git a/backend/app/modules/tampering/ela.py b/backend/app/modules/tampering/ela.py
+index 6eef427..6b10b82 100644
+--- a/backend/app/modules/tampering/ela.py
++++ b/backend/app/modules/tampering/ela.py
+@@ -17,6 +17,7 @@ from __future__ import annotations
+ import io
+ from dataclasses import dataclass
+ 
++import cv2
+ import numpy as np
+ from PIL import Image
+ 
+@@ -32,10 +33,8 @@ class ELAResult:
+     heatmap_png: bytes | None = None  # optional visualization for the UI/report
+ 
+ 
+-def run_ela(image_bytes: bytes, quality: int | None = None, generate_heatmap: bool = True) -> ELAResult:
+-    settings = get_settings()
+-    quality = quality or settings.ELA_JPEG_QUALITY
+-
++def _error_map(image_bytes: bytes, quality: int) -> tuple[np.ndarray, np.ndarray]:
++    """Per-pixel re-compression error (H x W) and the grayscale page it came from."""
+     original = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+ 
+     buffer = io.BytesIO()
+@@ -53,7 +52,16 @@ def run_ela(image_bytes: bytes, quality: int | None = None, generate_heatmap: bo
+         orig_arr = orig_arr[:h, :w]
+         recompressed_arr = recompressed_arr[:h, :w]
+ 
+-    diff = np.abs(orig_arr - recompressed_arr).sum(axis=2).astype(np.float32)  # H x W
++    diff = np.abs(orig_arr - recompressed_arr).sum(axis=2).astype(np.float32)
++    gray = cv2.cvtColor(orig_arr.astype(np.uint8), cv2.COLOR_RGB2GRAY)
++    return diff, gray
++
++
++def run_ela(image_bytes: bytes, quality: int | None = None, generate_heatmap: bool = True) -> ELAResult:
++    settings = get_settings()
++    quality = quality or settings.ELA_JPEG_QUALITY
++
++    diff, _ = _error_map(image_bytes, quality)
+ 
+     mean_error = float(diff.mean())
+     max_error = float(diff.max()) if diff.size else 0.0
+@@ -79,6 +87,44 @@ def run_ela(image_bytes: bytes, quality: int | None = None, generate_heatmap: bo
+     )
+ 
+ 
++def portrait_error_ratio(image_bytes: bytes, box: tuple[int, int, int, int], quality: int | None = None) -> float | None:
++    """How much harder the portrait re-compresses than the rest of the card.
++
++    Whole-page ELA averages a swapped photo away: a portrait is a few percent
++    of the page, so it rarely crosses the page-wide alarm. Here the error
++    inside the portrait is compared with the error on the rest of the card.
++
++    Raw error grows with detail (sharp edges always re-compress badly), so
++    each side is divided by its own edge strength, and only the more detailed
++    pixels are counted; flat paper says nothing either way. A pasted photo
++    carries its own compression history, usually on a shifted 8x8 grid, and
++    comes out well above a printed one. A genuine card re-shared through
++    WhatsApp is compressed evenly and comes out lower, not higher.
++
++    Returns None when either side has too little detail to judge.
++    """
++    quality = quality or get_settings().ELA_JPEG_QUALITY
++    diff, gray = _error_map(image_bytes, quality)
++    grad = cv2.magnitude(cv2.Sobel(gray.astype(np.float32), cv2.CV_32F, 1, 0),
++                         cv2.Sobel(gray.astype(np.float32), cv2.CV_32F, 0, 1))
++
++    x, y, w, h = box
++    inside = np.zeros(diff.shape, dtype=bool)
++    inside[max(0, y):y + h, max(0, x):x + w] = True
++    detailed = grad > np.percentile(grad, 60)
++
++    def error_per_edge(mask: np.ndarray) -> float | None:
++        if mask.sum() < 200:
++            return None
++        return float(diff[mask].mean() / (grad[mask].mean() + 1.0))
++
++    portrait = error_per_edge(inside & detailed)
++    rest = error_per_edge(~inside & detailed)
++    if portrait is None or not rest:
++        return None
++    return round(portrait / rest, 2)
++
++
+ def _render_heatmap(diff: np.ndarray) -> bytes:
+     normalized = diff - diff.min()
+     max_val = normalized.max()
+diff --git a/backend/app/modules/tampering/tampering_engine.py b/backend/app/modules/tampering/tampering_engine.py
+index 39f0b91..86d16ae 100644
+--- a/backend/app/modules/tampering/tampering_engine.py
++++ b/backend/app/modules/tampering/tampering_engine.py
+@@ -16,7 +16,7 @@ import numpy as np
+ 
+ from app.config import get_settings
+ from app.modules.tampering.copy_move import CopyMoveResult, detect_copy_move
+-from app.modules.tampering.ela import ELAResult, run_ela
++from app.modules.tampering.ela import ELAResult, portrait_error_ratio, run_ela
+ from app.modules.tampering.metadata_analysis import MetadataResult, analyze_metadata
+ 
+ _ELA_WEIGHT = 0.7
+@@ -79,13 +79,7 @@ def analyze_tampering(image_bytes: bytes, image_array: np.ndarray) -> TamperingR
+         + metadata_component * _METADATA_WEIGHT
+     )
+     score = int(round(min(100, score)))
+-
+-    if score < 20:
+-        verdict = "clean"
+-    elif score < 55:
+-        verdict = "suspicious"
+-    else:
+-        verdict = "tampered"
++    verdict = _verdict(score)
+ 
+     if not evidence:
+         evidence.append("No tampering indicators detected by ELA, copy-move analysis, or metadata inspection.")
+@@ -123,3 +117,80 @@ def analyze_tampering(image_bytes: bytes, image_array: np.ndarray) -> TamperingR
+         metadata=metadata_result,
+         components=components,
+     )
++
++
++def _verdict(score: int) -> str:
++    if score < 20:
++        return "clean"
++    if score < 55:
++        return "suspicious"
++    return "tampered"
++
++
++def portrait_box(region_detection: dict | None,
++                 face_box: tuple[int, int, int, int] | None) -> tuple[int, int, int, int] | None:
++    """The whole printed photo, edges included: that is where a paste seam sits.
++
++    The field detector's "photo" box is the photo frame itself, so it is used
++    when the layout was recognised. Otherwise the face box is grown out to an
++    ID-photo frame: some background either side, the hair above, the
++    shoulders below. A bare face box sits inside the photo and misses the seam.
++    """
++    photos = [r for r in (region_detection or {}).get("regions", [])
++              if r.get("class_name") == "photo" and r.get("confidence", 0) >= 0.5]
++    if photos:
++        b = max(photos, key=lambda r: r.get("confidence", 0))["bbox"]
++        return b["x"], b["y"], b["w"], b["h"]
++    if face_box is None:
++        return None
++    x, y, w, h = face_box
++    return x - int(w * 0.35), y - int(h * 0.3), int(w * 1.7), int(h * 1.8)
++
++
++def check_portrait(result: TamperingResult, image_bytes: bytes,
++                   box: tuple[int, int, int, int] | None) -> TamperingResult:
++    """Look for a swapped photo, once the portrait has been found.
++
++    Photo replacement is the most common forgery on a card, and the page-wide
++    ELA above misses it (the portrait is too small a share of the page). So a
++    clear portrait signal sets the floor of the forensics score instead of
++    being averaged in with signals that cannot see it.
++    """
++    if box is None:
++        return result
++    ratio = portrait_error_ratio(image_bytes, box)
++    if ratio is None:
++        return result
++
++    limit = get_settings().PORTRAIT_ELA_RATIO_LIMIT
++    near = limit * 0.9
++    if ratio >= limit:
++        raw = min(100.0, 60.0 + (ratio - limit) * 10.0)
++        result.evidence.insert(0, (
++            f"The photo re-compresses {ratio:.1f}x as hard as the rest of the card (alarm at {limit:.1f}x): "
++            f"it has a different compression history from the printed page, as a pasted-in photo does."
++        ))
++    elif ratio >= near:
++        raw = 35.0
++        result.evidence.append(
++            f"The photo re-compresses {ratio:.1f}x as hard as the rest of the card, just under the "
++            f"{limit:.1f}x alarm. Worth a look at the photo edges under a loupe."
++        )
++    else:
++        raw = 0.0
++
++    result.components.append({
++        "name": "Portrait vs card (photo swap)",
++        "raw": round(raw, 1),
++        "weight": "floor",
++        "contribution": round(raw, 1),
++        "how": (f"ELA error per unit of edge strength, inside the photo / rest of the card = {ratio:.2f}x; "
++                f"0 below {near:.1f}x, 35 up to {limit:.1f}x, then 60 + 10 per extra 1x, capped at 100; "
++                f"the forensics score is at least this value"),
++    })
++
++    if raw > result.tampering_score:
++        result.tampering_score = int(round(raw))
++        result.verdict = _verdict(result.tampering_score)
++        result.evidence = [e for e in result.evidence if not e.startswith("No tampering indicators")]
++    return result
+diff --git a/backend/tests/test_face_index.py b/backend/tests/test_face_index.py
+new file mode 100644
+index 0000000..3bf9175
+--- /dev/null
++++ b/backend/tests/test_face_index.py
+@@ -0,0 +1,74 @@
++"""One face, two identities: the face index across screenings."""
++import numpy as np
++import pytest
++
++from app.config import get_settings
++from app.modules.records import face_index
++
++
++def _unit(vec: np.ndarray) -> np.ndarray:
++    return (vec / np.linalg.norm(vec)).astype(np.float32)
++
++
++def _face(seed: int) -> np.ndarray:
++    return _unit(np.random.default_rng(seed).normal(size=128))
++
++
++def _same_face_new_photo(face: np.ndarray, seed: int, closeness: float = 0.85) -> np.ndarray:
++    """Another photo of the same person: mostly the same vector, plus a little of something else."""
++    other = np.random.default_rng(seed).normal(size=128)
++    other -= other.dot(face) * face  # make the extra part orthogonal, so cosine == closeness exactly
++    return _unit(closeness * face + np.sqrt(1 - closeness ** 2) * _unit(other))
++
++
++@pytest.fixture
++def index(tmp_path, monkeypatch):
++    monkeypatch.setattr(get_settings(), "PII_HASH_KEY", "test-key", raising=False)
++    path = tmp_path / "faces.sqlite"
++    face_index.remember("scan-1", _face(1), doc_number="ABCDE1234F", doc_type="pan",
++                        name="RAVI KUMAR", dob="12/04/1990", path=path)
++    return path
++
++
++def test_same_face_under_another_name_is_a_conflict(index):
++    result = face_index.search(_same_face_new_photo(_face(1), 7), doc_number="P1234567",
++                               name="SURESH SINGH", dob="12/04/1990", path=index)
++    assert [h.scan_id for h in result.conflicts] == ["scan-1"]
++    assert result.conflicts[0].similarity == pytest.approx(0.85, abs=1e-3)
++    assert result.conflicts[0].doc_masked.endswith("234F")
++
++
++def test_same_person_on_another_document_is_only_linked(index):
++    # a passport today, the PAN last week: same face, name and birth date
++    result = face_index.search(_same_face_new_photo(_face(1), 8), doc_number="P1234567",
++                               name="KUMAR RAVI", dob="12/04/1990", path=index)
++    assert not result.conflicts
++    assert [h.scan_id for h in result.linked] == ["scan-1"]
++
++
++def test_a_different_birth_date_breaks_the_link_even_with_the_same_name(index):
++    result = face_index.search(_same_face_new_photo(_face(1), 9), doc_number="P1234567",
++                               name="RAVI KUMAR", dob="12/04/1982", path=index)
++    assert [h.scan_id for h in result.conflicts] == ["scan-1"]
++
++
++def test_the_same_document_again_is_left_to_the_number_check(index):
++    result = face_index.search(_face(1), doc_number="abcde-1234-f", name="SOMEONE ELSE", dob=None, path=index)
++    assert not result.conflicts and not result.linked
++
++
++def test_a_stranger_and_a_lookalike_below_the_bar_do_not_match(index):
++    assert not face_index.search(_face(2), doc_number="X", name="A B", dob=None, path=index).conflicts
++    lookalike = _same_face_new_photo(_face(1), 10, closeness=0.5)  # above the 1:1 band, below the 1:N bar
++    assert not face_index.search(lookalike, doc_number="X", name="A B", dob=None, path=index).conflicts
++
++
++def test_nothing_to_search_with(index):
++    result = face_index.search(None, doc_number="X", name="A", dob=None, path=index)
++    assert not result.checked
++
++
++def test_rows_expire_with_the_retention_period(index):
++    assert face_index.forget_older_than(1, dry_run=True, path=index) == 0
++    assert face_index.forget_older_than(-1, path=index) == 1  # a cutoff in the future takes everything
++    assert not face_index.search(_face(1), doc_number="Y", name="Z", dob=None, path=index).conflicts
+diff --git a/backend/tests/test_portrait_ela.py b/backend/tests/test_portrait_ela.py
+new file mode 100644
+index 0000000..f9c9b3f
+--- /dev/null
++++ b/backend/tests/test_portrait_ela.py
+@@ -0,0 +1,100 @@
++"""Photo-swap detection: portrait ELA against the rest of the card.
++
++The cards here are drawn, not generated by cardgen, so the test runs without
++the dataset. The point is the separation, not the exact numbers; real
++calibration is training/eval_portrait_ela.py.
++"""
++import cv2
++import numpy as np
++import pytest
++
++from app.config import get_settings
++from app.modules.tampering.ela import portrait_error_ratio, run_ela
++from app.modules.tampering.tampering_engine import analyze_tampering, check_portrait, portrait_box
++
++PHOTO = (60, 150, 200, 240)  # x, y, w, h; deliberately off the 8x8 grid, as a paste would be
++FACE = (90, 190, 140, 160)  # what the face detector finds inside that photo
++DETECTED = {"regions": [{"class_name": "photo", "confidence": 0.97,
++                         "bbox": {"x": 60, "y": 150, "w": 200, "h": 240}}]}
++
++
++def _photo(seed: int) -> np.ndarray:
++    rng = np.random.default_rng(seed)
++    coarse = rng.integers(40, 220, (12, 10, 3)).astype(np.uint8)
++    face = cv2.resize(coarse, (200, 240), interpolation=cv2.INTER_CUBIC).astype(np.float64)
++    return np.clip(face + rng.normal(0, 6, face.shape), 0, 255).astype(np.uint8)
++
++
++def _card(seed: int) -> np.ndarray:
++    rng = np.random.default_rng(seed)
++    page = np.full((640, 1000, 3), (235, 228, 215), np.uint8)
++    for line in range(14):
++        cv2.putText(page, f"NAME XYZ 12/04/19{line:02d} {rng.integers(100000)}", (300, 60 + line * 40),
++                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (30, 30, 60), 2)
++    x, y, w, h = PHOTO
++    page[y:y + h, x:x + w] = _photo(seed + 100)
++    # a phone camera, not a scanner: slight blur and sensor noise
++    page = cv2.GaussianBlur(page, (3, 3), 0.8).astype(np.float64)
++    return np.clip(page + rng.normal(0, 3, page.shape), 0, 255).astype(np.uint8)
++
++
++def _jpeg(image: np.ndarray, quality: int) -> bytes:
++    return cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1].tobytes()
++
++
++def _decode(data: bytes) -> np.ndarray:
++    return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
++
++
++def _swapped(seed: int, pasted_quality: int = 75) -> bytes:
++    """What a forger does: open the genuine scan, paste a cut-out from another JPEG, save."""
++    page = _decode(_jpeg(_card(seed), 90))
++    x, y, w, h = PHOTO
++    page[y:y + h, x:x + w] = _decode(_jpeg(_photo(seed + 999), pasted_quality))
++    return _jpeg(page, 90)
++
++
++@pytest.mark.parametrize("seed", range(6))
++@pytest.mark.parametrize("box", [PHOTO, portrait_box(None, FACE)], ids=["detector-box", "grown-face-box"])
++def test_pasted_photo_stands_out_and_genuine_does_not(seed, box):
++    limit = get_settings().PORTRAIT_ELA_RATIO_LIMIT
++    genuine = portrait_error_ratio(_jpeg(_card(seed), 90), box)
++    forged = portrait_error_ratio(_swapped(seed), box)
++    assert genuine < limit * 0.9  # not even in the "worth a look" band
++    assert forged >= limit
++
++
++def test_the_detector_photo_box_wins_over_the_face_and_weak_boxes_are_ignored():
++    assert portrait_box(DETECTED, FACE) == PHOTO
++    weak = {"regions": [{**DETECTED["regions"][0], "confidence": 0.2}]}
++    assert portrait_box(weak, FACE) == portrait_box(None, FACE)
++    assert portrait_box(None, None) is None
++
++
++def test_page_wide_ela_misses_the_swap_that_the_portrait_check_catches():
++    forged = _swapped(1)
++    assert not run_ela(forged, generate_heatmap=False).suspicious  # the gap this check closes
++
++    result = check_portrait(analyze_tampering(forged, _decode(forged)), forged, portrait_box(DETECTED, FACE))
++    assert result.verdict == "tampered"
++    assert result.tampering_score >= 60
++    assert result.evidence[0].startswith("The photo re-compresses")
++    assert result.components[-1]["weight"] == "floor"
++
++
++def test_a_genuine_card_shared_twice_is_not_called_a_swap():
++    reshared = _jpeg(_decode(_jpeg(_decode(_jpeg(_card(2), 90)), 80)), 70)
++    result = check_portrait(analyze_tampering(reshared, _decode(reshared)), reshared, portrait_box(None, FACE))
++    assert result.verdict == "clean"
++    assert result.components[-1]["raw"] == 0
++
++
++def test_no_portrait_or_a_flat_box_leaves_the_result_alone():
++    data = _jpeg(_card(3), 90)
++    before = analyze_tampering(data, _decode(data))
++    score = before.tampering_score
++    assert check_portrait(before, data, None).tampering_score == score
++
++    blank = np.full((400, 600, 3), 230, np.uint8)
++    blank_bytes = _jpeg(blank, 90)
++    assert portrait_error_ratio(blank_bytes, (20, 20, 100, 120)) is None
+diff --git a/backend/training/eval_portrait_ela.py b/backend/training/eval_portrait_ela.py
+new file mode 100644
+index 0000000..3bbc0d4
+--- /dev/null
++++ b/backend/training/eval_portrait_ela.py
+@@ -0,0 +1,142 @@
++"""
++Measure photo-swap detection on the generated cards, and pick the alarm level.
++
++For every person and card type, three images are scored:
++  genuine     the card as generated
++  reshared    the same card squeezed through two more JPEG saves (q80, q70),
++              as a WhatsApp forward would do; this must NOT look like a swap
++  swapped     the next person's photo pasted over the holder's, after its own
++              JPEG round trip (q60 / q75 / q95), then saved at q90, the way
++              scripts/make_demo_samples.py makes demo_dl_photo_swap.jpg
++
++Each image gets the page-wide ELA verdict (what the engine had before) and the
++portrait ratio (tampering/ela.py: portrait_error_ratio), measured in the photo
++box from the generator's annotation.
++
++The suggested alarm is the midpoint between the highest genuine/reshared
++ratio and the lowest swapped one, if they do not overlap.
++
++Usage (from backend/):
++    .venv\\Scripts\\python training\\eval_portrait_ela.py [--people 300] [--data training/data_generated]
++Output: training/portrait_ela_eval.json, and a summary on screen
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from collections import defaultdict
++from datetime import datetime
++from pathlib import Path
++
++import cv2
++import numpy as np
++
++HERE = Path(__file__).resolve().parent
++sys.path.insert(0, str(HERE.parent))
++DATA = HERE / "data_generated"
++OUT = HERE / "portrait_ela_eval.json"
++DOC_TYPES = ("aadhar", "pan", "driving_license", "passport")
++PASTE_QUALITIES = (60, 75, 95)
++
++from app.modules.tampering.ela import portrait_error_ratio, run_ela  # noqa: E402
++
++
++def load(data_dir: Path, doc: str, person: int) -> tuple[bytes, np.ndarray, tuple[int, int, int, int]] | None:
++    stem = f"{doc}_{person:04d}"
++    image_path, ann_path = data_dir / doc / f"{stem}.jpg", data_dir / "annotations" / doc / f"{stem}.json"
++    if not image_path.is_file() or not ann_path.is_file():
++        return None
++    ann = json.loads(ann_path.read_text(encoding="utf-8"))
++    photo = next((r["bbox"] for r in ann["regions"] if r["kind"] == "photo"), None)
++    if photo is None:
++        return None
++    data = image_path.read_bytes()
++    return data, cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR), (
++        photo["x"], photo["y"], photo["w"], photo["h"])
++
++
++def jpeg(image: np.ndarray, quality: int) -> bytes:
++    return cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1].tobytes()
++
++
++def decode(data: bytes) -> np.ndarray:
++    return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
++
++
++def swap(page: np.ndarray, box, donor: np.ndarray, donor_box, quality: int) -> bytes:
++    x, y, w, h = box
++    dx, dy, dw, dh = donor_box
++    patch = cv2.resize(donor[dy:dy + dh, dx:dx + dw], (w, h), interpolation=cv2.INTER_AREA)
++    forged = page.copy()
++    forged[y:y + h, x:x + w] = decode(jpeg(patch, quality))
++    return jpeg(forged, 90)
++
++
++def score(data: bytes, box) -> tuple[float | None, bool]:
++    return portrait_error_ratio(data, box), run_ela(data, generate_heatmap=False).suspicious
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--people", type=int, default=300)
++    parser.add_argument("--data", type=Path, default=DATA)
++    args = parser.parse_args()
++
++    # kind -> doc type -> list of (ratio, page-wide ELA flagged)
++    seen: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
++    for doc in DOC_TYPES:
++        for person in range(1, args.people + 1):
++            card, donor = load(args.data, doc, person), load(args.data, doc, person + 1 if person < args.people else 1)
++            if card is None or donor is None:
++                continue
++            data, page, box = card
++            seen["genuine"][doc].append(score(data, box))
++            seen["reshared"][doc].append(score(jpeg(decode(jpeg(page, 80)), 70), box))
++            for q in PASTE_QUALITIES:
++                seen["swapped"][doc].append(score(swap(page, box, donor[1], donor[2], q), box))
++        print(f"{doc}: {len(seen['genuine'][doc])} cards")
++
++    if not any(seen["genuine"].values()):
++        raise SystemExit(f"No cards under {args.data}; generate the dataset first (scripts/cardgen/generate.py).")
++
++    report: dict = {"created": datetime.now().isoformat(timespec="seconds"), "per_type": {}}
++    for doc in DOC_TYPES:
++        if not seen["genuine"][doc]:
++            continue
++        clean = [r for kind in ("genuine", "reshared") for r, _ in seen[kind][doc] if r is not None]
++        forged = [r for r, _ in seen["swapped"][doc] if r is not None]
++        top_clean, low_forged = max(clean), min(forged)
++        alarm = round((top_clean + low_forged) / 2, 2) if top_clean < low_forged else None
++        report["per_type"][doc] = {
++            "genuine_ratio_range": [min(clean), top_clean],
++            "swapped_ratio_range": [low_forged, max(forged)],
++            "suggested_alarm": alarm,
++            "page_wide_ela_catches_swaps": f"{sum(f for _, f in seen['swapped'][doc])}/{len(seen['swapped'][doc])}",
++            "page_wide_ela_false_alarms": f"{sum(f for k in ('genuine', 'reshared') for _, f in seen[k][doc])}"
++                                          f"/{len(seen['genuine'][doc]) + len(seen['reshared'][doc])}",
++        }
++
++    # One alarm for all types: the engine has a single setting.
++    alarms = [v["suggested_alarm"] for v in report["per_type"].values()]
++    if all(a is not None for a in alarms):
++        clean_top = max(v["genuine_ratio_range"][1] for v in report["per_type"].values())
++        forged_low = min(v["swapped_ratio_range"][0] for v in report["per_type"].values())
++        report["suggested_PORTRAIT_ELA_RATIO_LIMIT"] = (
++            round((clean_top + forged_low) / 2, 2) if clean_top < forged_low else None)
++
++    limit = report.get("suggested_PORTRAIT_ELA_RATIO_LIMIT")
++    if limit is not None:
++        caught = sum(r is not None and r >= limit for doc in DOC_TYPES for r, _ in seen["swapped"][doc])
++        total = sum(len(seen["swapped"][doc]) for doc in DOC_TYPES)
++        report["portrait_check_catches_swaps"] = f"{caught}/{total}"
++
++    OUT.write_text(json.dumps(report, indent=2), encoding="utf-8")
++    print(json.dumps(report, indent=2))
++    if report.get("suggested_PORTRAIT_ELA_RATIO_LIMIT") is None:
++        print("\nGenuine and swapped ratios overlap on at least one card type: look at per_type before "
++              "choosing an alarm, and say so in the README rather than picking a number that hides it.")
++
++
++if __name__ == "__main__":
++    main()
+-- 
+2.43.0
+
